@@ -1,14 +1,14 @@
 #!/bin/bash
 
 # =============================================================================
-# Vibe Coding Bot - 설치 스크립트
+# VibeCheck - 설치 스크립트
 # =============================================================================
 
 set -e
 
 echo ""
 echo "=========================================="
-echo "  Vibe Coding Bot 설치"
+echo "  VibeCheck 설치"
 echo "=========================================="
 echo ""
 
@@ -23,38 +23,40 @@ NC='\033[0m' # No Color
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
-echo -e "${BLUE}[1/4]${NC} Python 버전 확인..."
+ENV_NAME="vibecheck"
 
-# Python 확인
-if command -v python3 &> /dev/null; then
-    PYTHON_CMD="python3"
-elif command -v python &> /dev/null; then
-    PYTHON_CMD="python"
-else
-    echo -e "${RED}Error: Python이 설치되어 있지 않습니다.${NC}"
-    echo "Python 3.8 이상을 설치해주세요."
+# =============================================================================
+# Conda 확인
+# =============================================================================
+
+echo -e "${BLUE}[1/4]${NC} Conda 확인..."
+
+if ! command -v conda &> /dev/null; then
+    echo -e "${RED}Error: Conda가 설치되어 있지 않습니다.${NC}"
+    echo "Miniconda 또는 Anaconda를 설치해주세요."
+    echo "https://docs.conda.io/en/latest/miniconda.html"
     exit 1
 fi
 
-PYTHON_VERSION=$($PYTHON_CMD --version 2>&1 | cut -d' ' -f2)
-echo -e "  Python $PYTHON_VERSION 발견"
+echo -e "  ${GREEN}Conda 발견${NC}"
 
 # =============================================================================
-# 가상환경 생성
+# Conda 환경 생성
 # =============================================================================
 
 echo ""
-echo -e "${BLUE}[2/4]${NC} 가상환경 생성..."
+echo -e "${BLUE}[2/4]${NC} Conda 환경 생성 ($ENV_NAME)..."
 
-if [ -d "venv" ]; then
-    echo -e "  ${YELLOW}기존 venv 발견, 재사용합니다.${NC}"
+if conda env list | grep -q "^$ENV_NAME "; then
+    echo -e "  ${YELLOW}기존 환경 발견, 재사용합니다.${NC}"
 else
-    $PYTHON_CMD -m venv venv
-    echo -e "  ${GREEN}venv 생성 완료${NC}"
+    conda create -n $ENV_NAME python=3.11 -y
+    echo -e "  ${GREEN}환경 생성 완료${NC}"
 fi
 
-# 가상환경 활성화
-source venv/bin/activate
+# Conda 환경 활성화
+eval "$(conda shell.bash hook)"
+conda activate $ENV_NAME
 
 # =============================================================================
 # 의존성 설치
@@ -69,7 +71,7 @@ pip install -r requirements.txt -q
 echo -e "  ${GREEN}패키지 설치 완료${NC}"
 
 # =============================================================================
-# 환경변수 설정
+# 환경변수 설정 (bash로 직접 처리)
 # =============================================================================
 
 echo ""
@@ -81,50 +83,44 @@ echo "  https://api.slack.com/apps 에서 발급받으세요."
 echo "=========================================="
 echo ""
 
-# Python으로 대화형 설정
-$PYTHON_CMD << 'PYTHON_SCRIPT'
-import os
+# Bot Token 입력
+echo "Slack Bot Token (xoxb-로 시작)"
+read -p "  Bot Token: " BOT_TOKEN
+while [ -z "$BOT_TOKEN" ]; do
+    echo "  필수 입력값입니다."
+    read -p "  Bot Token: " BOT_TOKEN
+done
 
-def get_input(prompt, required=True, default=""):
-    while True:
-        if default:
-            value = input(f"{prompt} [{default}]: ").strip()
-            if not value:
-                value = default
-        else:
-            value = input(f"{prompt}: ").strip()
+echo ""
 
-        if value or not required:
-            return value
-        print("  필수 입력값입니다. 다시 입력해주세요.")
+# App Token 입력
+echo "Slack App Token (xapp-로 시작, Socket Mode용)"
+read -p "  App Token: " APP_TOKEN
+while [ -z "$APP_TOKEN" ]; do
+    echo "  필수 입력값입니다."
+    read -p "  App Token: " APP_TOKEN
+done
 
-print("Slack Bot Token (xoxb-로 시작)")
-bot_token = get_input("  Bot Token")
+echo ""
 
-print("")
-print("Slack App Token (xapp-로 시작, Socket Mode용)")
-app_token = get_input("  App Token")
-
-print("")
-print("Claude가 작업할 디렉토리 경로")
-default_dir = os.getcwd()
-work_dir = get_input("  작업 디렉토리", default=default_dir)
+# 작업 디렉토리 입력
+DEFAULT_DIR=$(pwd)
+echo "작업할 디렉토리 경로"
+read -p "  작업 디렉토리 [$DEFAULT_DIR]: " WORK_DIR
+WORK_DIR=${WORK_DIR:-$DEFAULT_DIR}
 
 # .env 파일 생성
-env_content = f"""# Vibe Coding Bot 환경설정
+cat > .env << EOF
+# VibeCheck 환경설정
 # 자동 생성됨
 
-SLACK_BOT_TOKEN={bot_token}
-SLACK_APP_TOKEN={app_token}
-WORK_DIR={work_dir}
-"""
+SLACK_BOT_TOKEN=$BOT_TOKEN
+SLACK_APP_TOKEN=$APP_TOKEN
+WORK_DIR=$WORK_DIR
+EOF
 
-with open(".env", "w") as f:
-    f.write(env_content)
-
-print("")
-print("\033[0;32m.env 파일이 생성되었습니다.\033[0m")
-PYTHON_SCRIPT
+echo ""
+echo -e "${GREEN}.env 파일이 생성되었습니다.${NC}"
 
 # =============================================================================
 # 완료
@@ -137,7 +133,7 @@ echo "=========================================="
 echo ""
 echo "실행 방법:"
 echo ""
-echo -e "  ${YELLOW}source venv/bin/activate${NC}"
+echo -e "  ${YELLOW}conda activate $ENV_NAME${NC}"
 echo -e "  ${YELLOW}python main.py${NC}"
 echo ""
 echo "또는 한 줄로:"
