@@ -3,16 +3,20 @@ VibeCheck Cloud Server
 - Slack OAuth로 멀티 워크스페이스 지원
 - Agent WebSocket 연결 관리
 - 메시지 중계
+- Block Kit UI + Interactivity
+- Allowlist 관리
 """
 
 import os
+import json
 import logging
 import asyncio
-from typing import Dict
+from typing import Dict, List
 from contextlib import asynccontextmanager
+from urllib.parse import parse_qs
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request, Form
+from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from dotenv import load_dotenv
 from slack_sdk.web.async_client import AsyncWebClient
 from slack_sdk.oauth import AuthorizeUrlGenerator
@@ -56,8 +60,189 @@ SCOPES = [
 # API Key -> WebSocket 매핑
 connected_agents: Dict[str, WebSocket] = {}
 
-# API Key -> (team_id, channel) 매핑 (응답 보낼 곳)
+# API Key -> (team_id, channel, message_ts) 매핑 (응답 보낼 곳)
 pending_responses: Dict[str, tuple] = {}
+
+# API Key -> pending action data (file changes waiting for approval)
+pending_actions: Dict[str, dict] = {}
+
+# 기본 Allowlist (Claude Code 권한)
+DEFAULT_ALLOWLIST = [
+    "Bash(git status:*)",
+    "Bash(git diff:*)",
+    "Bash(git log:*)",
+    "Bash(ls:*)",
+    "Bash(cat:*)",
+    "Bash(grep:*)",
+    "Read",
+    "Glob",
+    "Grep",
+]
+
+
+# =============================================================================
+# Block Kit 메시지 빌더
+# =============================================================================
+
+def build_processing_blocks() -> List[dict]:
+    """처리 중 메시지 Block Kit"""
+    return [
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": "⏳ *처리 중...*"
+            }
+        }
+    ]
+
+
+def build_response_blocks(response_text: str, has_changes: bool = False, action_id: str = None) -> List[dict]:
+    """응답 메시지 Block Kit"""
+    blocks = []
+
+    # 응답 텍스트 (최대 3000자로 제한)
+    if len(response_text) > 3000:
+        response_text = response_text[:2900] + "\n\n... (truncated)"
+
+    blocks.append({
+        "type": "section",
+        "text": {
+            "type": "mrkdwn",
+            "text": response_text
+        }
+    })
+
+    # 파일 변경이 있으면 승인 버튼 추가
+    if has_changes and action_id:
+        blocks.append({"type": "divider"})
+        blocks.append({
+            "type": "actions",
+            "block_id": f"approval_{action_id}",
+            "elements": [
+                {
+                    "type": "button",
+                    "text": {"type": "plain_text", "text": "✅ 반영하기", "emoji": True},
+                    "style": "primary",
+                    "action_id": "approve_changes",
+                    "value": action_id
+                },
+                {
+                    "type": "button",
+                    "text": {"type": "plain_text", "text": "❌ 취소", "emoji": True},
+                    "style": "danger",
+                    "action_id": "reject_changes",
+                    "value": action_id
+                }
+            ]
+        })
+
+    return blocks
+
+
+def build_status_blocks(status: str, message: str) -> List[dict]:
+    """상태 메시지 Block Kit"""
+    emoji = "✅" if status == "success" else "⚠️" if status == "warning" else "❌"
+    return [
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": f"{emoji} {message}"
+            }
+        }
+    ]
+
+
+def build_allowlist_blocks(allowlist: List[str], api_key: str) -> List[dict]:
+    """Allowlist 관리 Block Kit"""
+    blocks = [
+        {
+            "type": "header",
+            "text": {"type": "plain_text", "text": "🔐 권한 설정 (Allowlist)", "emoji": True}
+        },
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": "Claude Code가 자동으로 실행할 수 있는 명령어 목록입니다.\n권한을 추가하거나 제거하려면 아래 버튼을 사용하세요."
+            }
+        },
+        {"type": "divider"}
+    ]
+
+    # 현재 allowlist 표시
+    for i, item in enumerate(allowlist):
+        blocks.append({
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": f"`{item}`"
+            },
+            "accessory": {
+                "type": "button",
+                "text": {"type": "plain_text", "text": "🗑️ 제거", "emoji": True},
+                "style": "danger",
+                "action_id": f"remove_allowlist_{i}",
+                "value": item
+            }
+        })
+
+    # 추가 버튼
+    blocks.append({"type": "divider"})
+    blocks.append({
+        "type": "actions",
+        "elements": [
+            {
+                "type": "button",
+                "text": {"type": "plain_text", "text": "➕ 권한 추가", "emoji": True},
+                "action_id": "add_allowlist",
+                "style": "primary"
+            },
+            {
+                "type": "button",
+                "text": {"type": "plain_text", "text": "🔄 기본값으로 초기화", "emoji": True},
+                "action_id": "reset_allowlist"
+            }
+        ]
+    })
+
+    return blocks
+
+
+def build_add_permission_modal(trigger_id: str) -> dict:
+    """권한 추가 모달"""
+    return {
+        "type": "modal",
+        "callback_id": "add_permission_modal",
+        "title": {"type": "plain_text", "text": "권한 추가"},
+        "submit": {"type": "plain_text", "text": "추가"},
+        "close": {"type": "plain_text", "text": "취소"},
+        "blocks": [
+            {
+                "type": "input",
+                "block_id": "permission_input",
+                "element": {
+                    "type": "plain_text_input",
+                    "action_id": "permission_value",
+                    "placeholder": {
+                        "type": "plain_text",
+                        "text": "예: Bash(npm install:*)"
+                    }
+                },
+                "label": {"type": "plain_text", "text": "권한 패턴"}
+            },
+            {
+                "type": "context",
+                "elements": [
+                    {
+                        "type": "mrkdwn",
+                        "text": "*예시:*\n• `Read` - 파일 읽기\n• `Edit` - 파일 수정\n• `Bash(npm:*)` - npm 명령어\n• `Bash(git commit:*)` - git commit"
+                    }
+                ]
+            }
+        ]
+    }
 
 
 def get_slack_client(team_id: str) -> AsyncWebClient:
@@ -291,6 +476,170 @@ async def slack_events(request: Request):
     return {"ok": True}
 
 
+# =============================================================================
+# Slack Interactivity (버튼 클릭 등)
+# =============================================================================
+
+@app.post("/slack/interactions")
+async def slack_interactions(request: Request):
+    """Slack 인터랙션 처리 (버튼 클릭, 모달 제출 등)"""
+    # Slack은 x-www-form-urlencoded로 payload를 보냄
+    form_data = await request.form()
+    payload_str = form_data.get("payload", "{}")
+    payload = json.loads(payload_str)
+
+    action_type = payload.get("type")
+    logger.info(f"Interaction 수신: type={action_type}")
+
+    if action_type == "block_actions":
+        await handle_block_actions(payload)
+    elif action_type == "view_submission":
+        return await handle_view_submission(payload)
+
+    return JSONResponse(content={})
+
+
+async def handle_block_actions(payload: dict):
+    """버튼 클릭 등 블록 액션 처리"""
+    actions = payload.get("actions", [])
+    user_id = payload.get("user", {}).get("id")
+    team_id = payload.get("team", {}).get("id")
+    channel_id = payload.get("channel", {}).get("id")
+    trigger_id = payload.get("trigger_id")
+
+    client = get_slack_client(team_id)
+    if not client:
+        return
+
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(
+            User.slack_user_id == user_id,
+            User.slack_team_id == team_id
+        ).first()
+
+        if not user:
+            return
+
+        for action in actions:
+            action_id = action.get("action_id", "")
+            value = action.get("value", "")
+
+            # 권한 추가 버튼
+            if action_id == "add_allowlist":
+                modal = build_add_permission_modal(trigger_id)
+                await client.views_open(trigger_id=trigger_id, view=modal)
+
+            # 권한 제거 버튼
+            elif action_id.startswith("remove_allowlist_"):
+                allowlist = json.loads(user.allowlist) if user.allowlist else DEFAULT_ALLOWLIST.copy()
+                if value in allowlist:
+                    allowlist.remove(value)
+                    user.allowlist = json.dumps(allowlist)
+                    db.commit()
+
+                # 업데이트된 목록 표시
+                await client.chat_postMessage(
+                    channel=channel_id,
+                    text="권한이 제거되었습니다.",
+                    blocks=build_allowlist_blocks(allowlist, user.api_key)
+                )
+
+            # Allowlist 초기화
+            elif action_id == "reset_allowlist":
+                user.allowlist = json.dumps(DEFAULT_ALLOWLIST)
+                db.commit()
+
+                await client.chat_postMessage(
+                    channel=channel_id,
+                    text="권한이 초기화되었습니다.",
+                    blocks=build_allowlist_blocks(DEFAULT_ALLOWLIST, user.api_key)
+                )
+
+            # 변경사항 승인
+            elif action_id == "approve_changes":
+                pending = pending_actions.get(value)
+                if pending:
+                    # Agent에게 승인 메시지 전송
+                    ws = connected_agents.get(user.api_key)
+                    if ws:
+                        await ws.send_json({
+                            "type": "approval",
+                            "action_id": value,
+                            "approved": True
+                        })
+                    del pending_actions[value]
+
+                await client.chat_postMessage(
+                    channel=channel_id,
+                    text="변경사항이 승인되었습니다.",
+                    blocks=build_status_blocks("success", "변경사항이 적용되었습니다.")
+                )
+
+            # 변경사항 거절
+            elif action_id == "reject_changes":
+                pending = pending_actions.get(value)
+                if pending:
+                    ws = connected_agents.get(user.api_key)
+                    if ws:
+                        await ws.send_json({
+                            "type": "approval",
+                            "action_id": value,
+                            "approved": False
+                        })
+                    del pending_actions[value]
+
+                await client.chat_postMessage(
+                    channel=channel_id,
+                    text="변경사항이 취소되었습니다.",
+                    blocks=build_status_blocks("warning", "변경사항이 취소되었습니다.")
+                )
+
+    finally:
+        db.close()
+
+
+async def handle_view_submission(payload: dict) -> JSONResponse:
+    """모달 제출 처리"""
+    callback_id = payload.get("view", {}).get("callback_id")
+    user_id = payload.get("user", {}).get("id")
+    team_id = payload.get("team", {}).get("id")
+
+    if callback_id == "add_permission_modal":
+        # 권한 추가 모달 처리
+        values = payload.get("view", {}).get("state", {}).get("values", {})
+        permission_value = values.get("permission_input", {}).get("permission_value", {}).get("value", "")
+
+        if permission_value:
+            db = SessionLocal()
+            try:
+                user = db.query(User).filter(
+                    User.slack_user_id == user_id,
+                    User.slack_team_id == team_id
+                ).first()
+
+                if user:
+                    allowlist = json.loads(user.allowlist) if user.allowlist else DEFAULT_ALLOWLIST.copy()
+                    if permission_value not in allowlist:
+                        allowlist.append(permission_value)
+                        user.allowlist = json.dumps(allowlist)
+                        db.commit()
+
+                    # 업데이트된 목록 DM으로 전송
+                    client = get_slack_client(team_id)
+                    if client and user.slack_channel_id:
+                        await client.chat_postMessage(
+                            channel=user.slack_channel_id,
+                            text=f"권한이 추가되었습니다: {permission_value}",
+                            blocks=build_allowlist_blocks(allowlist, user.api_key)
+                        )
+
+            finally:
+                db.close()
+
+    return JSONResponse(content={})
+
+
 async def handle_message_event(body: dict, event: dict):
     """메시지 이벤트 처리"""
     # 봇 메시지 무시
@@ -335,28 +684,86 @@ async def handle_message_event(body: dict, event: dict):
             db.commit()
             db.refresh(user)
 
+            # Block Kit으로 환영 메시지
+            welcome_blocks = [
+                {
+                    "type": "header",
+                    "text": {"type": "plain_text", "text": "🎉 환영합니다!", "emoji": True}
+                },
+                {
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": f"API Key가 발급되었습니다:\n`{user.api_key}`"
+                    }
+                },
+                {"type": "divider"},
+                {
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": "*서버에서 Agent를 실행해주세요:*"
+                    }
+                },
+                {
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": f"```git clone https://github.com/NestozAI/VibeCheck.git\ncd VibeCheck/cloud/agent\npip install -r requirements.txt\npython agent.py --key={user.api_key}```"
+                    }
+                },
+                {"type": "divider"},
+                {
+                    "type": "context",
+                    "elements": [
+                        {
+                            "type": "mrkdwn",
+                            "text": "💡 `/permissions` 를 입력하면 Claude Code 권한을 관리할 수 있습니다."
+                        }
+                    ]
+                }
+            ]
+
             await client.chat_postMessage(
                 channel=channel,
-                text=f"환영합니다! API Key가 발급되었습니다.\n\n"
-                     f"`{user.api_key}`\n\n"
-                     f"서버에서 Agent를 실행해주세요:\n"
-                     f"```\ngit clone https://github.com/NestozAI/VibeCheck.git\n"
-                     f"cd VibeCheck/cloud/agent\n"
-                     f"pip install -r requirements.txt\n"
-                     f"python agent.py --key={user.api_key}\n```"
+                text="환영합니다! API Key가 발급되었습니다.",
+                blocks=welcome_blocks
+            )
+            return
+
+        # 권한 관리 명령어 처리
+        if message.lower() in ["/permissions", "/권한", "/allowlist"]:
+            allowlist = json.loads(user.allowlist) if user.allowlist else DEFAULT_ALLOWLIST.copy()
+            await client.chat_postMessage(
+                channel=channel,
+                text="권한 설정",
+                blocks=build_allowlist_blocks(allowlist, user.api_key)
             )
             return
 
         # Agent 연결 확인
         if user.api_key not in connected_agents:
+            not_connected_blocks = [
+                {
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": "⚠️ *Agent가 연결되지 않았습니다.*"
+                    }
+                },
+                {"type": "divider"},
+                {
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": f"서버에서 Agent를 실행해주세요:\n```python agent.py --key={user.api_key}```"
+                    }
+                }
+            ]
             await client.chat_postMessage(
                 channel=channel,
-                text=f"Agent가 연결되지 않았습니다.\n\n"
-                     f"서버에서 Agent를 실행해주세요:\n"
-                     f"```\ngit clone https://github.com/NestozAI/VibeCheck.git\n"
-                     f"cd VibeCheck/cloud/agent\n"
-                     f"pip install -r requirements.txt\n"
-                     f"python agent.py --key={user.api_key}\n```"
+                text="Agent가 연결되지 않았습니다.",
+                blocks=not_connected_blocks
             )
             return
 
@@ -364,22 +771,30 @@ async def handle_message_event(body: dict, event: dict):
         if user.usage_count >= user.usage_limit:
             await client.chat_postMessage(
                 channel=channel,
-                text="사용량 한도에 도달했습니다. 업그레이드가 필요합니다."
+                text="사용량 한도에 도달했습니다.",
+                blocks=build_status_blocks("error", "사용량 한도에 도달했습니다. 업그레이드가 필요합니다.")
             )
             return
 
-        # 응답 대기 정보 저장
-        pending_responses[user.api_key] = (team_id, channel)
+        # 처리 중 메시지 (Block Kit)
+        processing_msg = await client.chat_postMessage(
+            channel=channel,
+            text="처리 중...",
+            blocks=build_processing_blocks()
+        )
+        message_ts = processing_msg.get("ts")
 
-        # 처리 중 메시지
-        await client.chat_postMessage(channel=channel, text="⏳ 처리 중...")
+        # 응답 대기 정보 저장 (message_ts 포함)
+        pending_responses[user.api_key] = (team_id, channel, message_ts)
 
         # Agent로 메시지 전송
         success = await send_to_agent(user.api_key, message)
         if not success:
-            await client.chat_postMessage(
+            await client.chat_update(
                 channel=channel,
-                text="Agent 연결이 끊어졌습니다. 다시 연결해주세요."
+                ts=message_ts,
+                text="Agent 연결이 끊어졌습니다.",
+                blocks=build_status_blocks("error", "Agent 연결이 끊어졌습니다. 다시 연결해주세요.")
             )
             return
 
@@ -431,12 +846,16 @@ async def agent_websocket(websocket: WebSocket, key: str):
                     pending = pending_responses.get(key)
 
                     if pending and response_text:
-                        team_id, channel = pending
+                        team_id, channel, message_ts = pending
                         client = get_slack_client(team_id)
                         if client:
-                            await client.chat_postMessage(
+                            # Block Kit으로 응답 전송 (처리 중 메시지 업데이트)
+                            response_blocks = build_response_blocks(response_text)
+                            await client.chat_update(
                                 channel=channel,
-                                text=response_text
+                                ts=message_ts,
+                                text=response_text[:500],
+                                blocks=response_blocks
                             )
                             logger.info(f"Slack으로 응답 전송: {response_text[:50]}...")
 

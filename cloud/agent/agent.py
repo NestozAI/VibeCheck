@@ -27,8 +27,8 @@ logger = logging.getLogger(__name__)
 # 설정
 # =============================================================================
 
-# Render 배포 후 이 URL로 변경
-DEFAULT_SERVER = "wss://vibecheck-cloud.onrender.com/ws/agent"
+# Render 배포 URL
+DEFAULT_SERVER = "wss://vibecheck-ndq5.onrender.com/ws/agent"
 
 
 class VibeAgent:

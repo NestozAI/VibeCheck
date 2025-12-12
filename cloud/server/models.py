@@ -60,6 +60,9 @@ class User(Base):
     usage_count = Column(Integer, default=0)
     usage_limit = Column(Integer, default=100)  # 무료 플랜 기본값
 
+    # Allowlist (JSON 문자열로 저장)
+    allowlist = Column(String, nullable=True)  # JSON array
+
     # 타임스탬프
     created_at = Column(DateTime, default=datetime.utcnow)
     last_active_at = Column(DateTime, default=datetime.utcnow)
