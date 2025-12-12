@@ -9,3 +9,5 @@ __pycache__/
 
 # OS
 .DS_Store
+*.db
+.env
