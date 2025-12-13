@@ -4,8 +4,29 @@
 
 [![English](https://img.shields.io/badge/Language-English-blue)](./README.md)
 [![Korean](https://img.shields.io/badge/Language-한국어-red)](./README_kr.md)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Python](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/)
+[![Waitlist](https://img.shields.io/badge/Cloud_Version-Join_Waitlist-39FF14?style=flat&logo=google-forms&logoColor=black)](https://NestozAI.github.io/VibeCheck)
 
 **VibeCheck**은 Slack과 로컬 서버를 연결하는 브릿지입니다. 코드 실행, 시각화 생성, 파일 관리를 Slack 워크스페이스에서 보안 승인 시스템과 함께 사용할 수 있습니다.
+
+---
+
+### 🚀 설치 없이 바로 사용하고 싶으세요?
+
+**복잡한 서버 설정과 설치가 귀찮으신가요?**
+VibeCheck Cloud를 사용하면 Slack 한 번 연결로 바로 사용할 수 있습니다. (GPU 서버 필요 없음!)
+
+| **🛠️ 셀프 호스팅 (오픈소스)** | **☁️ 클라우드 / 프리미엄 (사전예약)** |
+| :--- | :--- |
+| ✅ **무료** (자체 서버 사용) | ⚡ **설치 없음** (가입 후 바로 사용) |
+| 💻 자체 GPU/CPU 자원 사용 | 🧠 고성능 클라우드 GPU 지원 (예정) |
+| 🔧 직접 설치 및 유지보수 | ☕ **유지보수 제로** (24/7 가동) |
+| [👇 **아래 설치 가이드 참조**](#빠른-시작) | [👉 **[사전예약 신청하기]**](https://NestozAI.github.io/VibeCheck) |
+
+> 🎁 **지금 사전예약하시면 출시 시 `1개월 무료` 혜택을 드립니다.**
+
+---
 
 ![Architecture](./assets/architecture.png)
 

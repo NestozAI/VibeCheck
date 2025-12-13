@@ -1,11 +1,32 @@
 # VibeCheck
 
-> Talk to your server directly from Slack.
+> **Talk to your server directly from Slack.**
 
 [![English](https://img.shields.io/badge/Language-English-blue)](./README.md)
 [![Korean](https://img.shields.io/badge/Language-한국어-red)](./README_kr.md)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Python](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/)
+[![Waitlist](https://img.shields.io/badge/Cloud_Version-Join_Waitlist-39FF14?style=flat&logo=google-forms&logoColor=black)](https://NestozAI.github.io/VibeCheck)
 
 **VibeCheck** acts as a bridge between Slack and your local server. Execute code, generate visualizations, and manage files - all from your Slack workspace with a security approval system.
+
+---
+
+### 🚀 Want to use it without any setup?
+
+**Tired of complex server configuration and installation?**
+With VibeCheck Cloud, connect to Slack once and start using it immediately. (No GPU server required!)
+
+| **🛠️ Self-Hosted (Open Source)** | **☁️ Cloud / Premium (Waitlist)** |
+| :--- | :--- |
+| ✅ **Free** (use your own server) | ⚡ **No installation** (sign up and use instantly) |
+| 💻 Use your own GPU/CPU resources | 🧠 High-performance Cloud GPU support (coming soon) |
+| 🔧 Self-installation & maintenance | ☕ **Zero maintenance** (24/7 uptime) |
+| [👇 **See installation guide below**](#quick-start) | [👉 **[Join the Waitlist]**](https://NestozAI.github.io/VibeCheck) |
+
+> 🎁 **Join the waitlist now and get `1 month free` when we launch.**
+
+---
 
 ![Architecture](./assets/architecture.png)
 
