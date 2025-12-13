@@ -1,23 +1,23 @@
 # VibeCheck
 
-Control your server's AI coding assistant remotely via Slack. Execute code, generate visualizations, and manage files - all from your Slack workspace.
+> Talk to your server directly from Slack.
 
-```
-[Slack] <---> [Your Server] <---> [AI Coding Assistant]
-   DM chat      Agent runs       Code modifications
-```
+[![English](https://img.shields.io/badge/Language-English-blue)](./README.md)
+[![Korean](https://img.shields.io/badge/Language-한국어-red)](./README_kr.md)
+
+**VibeCheck** acts as a bridge between Slack and your local server. Execute code, generate visualizations, and manage files - all from your Slack workspace with a security approval system.
+
+![Architecture](./assets/architecture.png)
 
 ## Features
 
-- **Natural Language Coding**: Chat with AI to write, modify, and execute code
-- **Image Generation**: Generate charts and visualizations, automatically uploaded to Slack
-- **Security Layer**: Path-based access control with approval system
-- **Safe System Commands**: Auto-approved read-only commands (nvidia-smi, df, etc.)
-- **Session Continuity**: Conversations persist across messages
+- **Natural Language Coding** - Chat with AI to write, modify, and execute code
+- **Image Generation** - Generate charts and visualizations, automatically uploaded to Slack
+- **Security Layer** - Path-based access control with approval system
+- **Safe System Commands** - Auto-approved read-only commands (nvidia-smi, df, etc.)
+- **Session Continuity** - Conversations persist across messages
 
 ## Quick Start
-
-### Self-Hosted (Free)
 
 ```bash
 git clone https://github.com/NestozAI/VibeCheck
@@ -26,7 +26,7 @@ cd VibeCheck/self-hosted
 ./run.sh
 ```
 
-## Slack App Setup (Detailed)
+## Slack App Setup
 
 ### Step 1: Create a Slack App
 
@@ -39,7 +39,7 @@ cd VibeCheck/self-hosted
 1. Navigate to **Settings → Socket Mode**
 2. Toggle **Enable Socket Mode** to ON
 3. Click **"Generate"** to create an App-Level Token
-   - Token Name: `vibecheck-socket` (or any name)
+   - Token Name: `vibecheck-socket`
    - Scope: `connections:write`
 4. Copy the token starting with `xapp-...` → This is your `SLACK_APP_TOKEN`
 
@@ -65,26 +65,22 @@ Navigate to **OAuth & Permissions → Bot Token Scopes** and add:
    - `app_mention` - Respond to @mentions
    - `app_home_opened` - Show home tab
 
-### Step 5: Enable Interactivity (for approval buttons)
+### Step 5: Enable Interactivity
 
 1. Navigate to **Interactivity & Shortcuts**
 2. Toggle **Interactivity** to ON
-3. (Socket Mode handles the request URL automatically)
 
 ### Step 6: Enable App Home
 
 1. Navigate to **App Home**
-2. Under **Show Tabs**, enable:
-   - **Home Tab** - ON
-   - **Messages Tab** - ON
-   - Check **"Allow users to send Slash commands and messages from the messages tab"**
+2. Enable **Home Tab** and **Messages Tab**
+3. Check **"Allow users to send Slash commands and messages from the messages tab"**
 
 ### Step 7: Install App to Workspace
 
 1. Navigate to **OAuth & Permissions**
 2. Click **"Install to Workspace"**
-3. Authorize the app
-4. Copy the **Bot User OAuth Token** starting with `xoxb-...` → This is your `SLACK_BOT_TOKEN`
+3. Copy the **Bot User OAuth Token** (`xoxb-...`) → This is your `SLACK_BOT_TOKEN`
 
 ### Step 8: Configure Environment
 
@@ -97,6 +93,8 @@ WORK_DIR=/path/to/your/project
 ```
 
 ## Security System
+
+![Security Flow](./assets/security_flow.png)
 
 VibeCheck includes a path-based security system to protect your file system.
 
@@ -111,7 +109,7 @@ VibeCheck includes a path-based security system to protect your file system.
 
 ### Safe System Commands
 
-These read-only commands are auto-approved (no user confirmation needed):
+These read-only commands are auto-approved:
 
 ```
 nvidia-smi, df, free, uptime, whoami, hostname,
@@ -123,27 +121,10 @@ ls, pwd, date, which, echo
 
 | Command | Description |
 |---------|-------------|
-| `help` or `/help` | Show help message |
-| `reset` or `/reset` | Start a new conversation |
+| `help` | Show help message |
+| `reset` | Start a new conversation |
 | `/paths` | View trusted paths list |
-| `/trust /path/to/folder` | Add path to trusted list |
-
-### Example Interaction
-
-```
-User: Read the logs in /var/log/myapp/
-
-Bot: ⚠️ Security Warning
-     AI is trying to access:
-     • `/var/log/myapp/`
-
-     [✅ Approve & Execute] [✅ Approve (Permanent)] [❌ Deny]
-
-User: (clicks Approve)
-
-Bot: ⏳ Approved! Running...
-Bot: Here are the log contents: [...]
-```
+| `/trust /path` | Add path to trusted list |
 
 ## Usage Examples
 
@@ -157,11 +138,6 @@ Bot: 📂 Project structure:
      │   ├── index.ts
      │   └── utils.ts
      └── package.json
-
-User: Add logging to index.ts
-
-Bot: ✅ Logging added!
-     [Shows changes]
 ```
 
 ### Data Visualization
@@ -169,8 +145,8 @@ Bot: ✅ Logging added!
 ```
 User: Plot y=x², y=2x, and y=3 on the same graph
 
-Bot: [Generates and uploads graph image]
-     📊 Generated image: `quadratic_comparison.png`
+Bot: [Uploads graph image]
+     📊 Generated image: quadratic_comparison.png
 ```
 
 ### System Monitoring
@@ -179,46 +155,28 @@ Bot: [Generates and uploads graph image]
 User: Check GPU status
 
 Bot: nvidia-smi output:
-     +-----------------------------------------------------------------------------+
-     | NVIDIA-SMI 525.85.12    Driver Version: 525.85.12    CUDA Version: 12.0     |
-     | GPU  Name        Persistence-M| Bus-Id        Disp.A | Volatile Uncorr. ECC |
+     +------------------------------------------+
+     | NVIDIA-SMI 525.85.12  CUDA Version: 12.0 |
      ...
 ```
 
-## Architecture
+### Security Approval
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                        Slack                                 │
-│  ┌─────────┐                              ┌─────────┐       │
-│  │   DM    │ ────── Socket Mode ───────▶ │   Bot   │       │
-│  └─────────┘                              └────┬────┘       │
-└───────────────────────────────────────────────┼─────────────┘
-                                                │
-┌───────────────────────────────────────────────┼─────────────┐
-│                    Your Server                 │             │
-│                                               ▼             │
-│  ┌─────────────────────────────────────────────────────┐   │
-│  │                  main.py                             │   │
-│  │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  │   │
-│  │  │  Security   │  │   Image     │  │   Claude    │  │   │
-│  │  │   Layer     │  │   Upload    │  │   Runner    │  │   │
-│  │  └─────────────┘  └─────────────┘  └──────┬──────┘  │   │
-│  └───────────────────────────────────────────┼──────────┘   │
-│                                               │             │
-│                                               ▼             │
-│                                    ┌─────────────────┐      │
-│                                    │  AI CLI Tool    │      │
-│                                    │  (subprocess)   │      │
-│                                    └─────────────────┘      │
-└─────────────────────────────────────────────────────────────┘
+User: Read the logs in /var/log/myapp/
+
+Bot: ⚠️ Security Warning
+     AI is trying to access:
+     • /var/log/myapp/
+
+     [✅ Approve & Execute] [✅ Approve (Permanent)] [❌ Deny]
 ```
 
 ## Requirements
 
 - Python 3.8+
 - AI Coding CLI tool
-- Slack Workspace (with app creation permissions)
+- Slack Workspace
 
 ## File Structure
 
@@ -226,39 +184,27 @@ Bot: nvidia-smi output:
 VibeCheck/
 ├── self-hosted/
 │   ├── main.py          # Main bot application
-│   ├── cleaner.py       # Output formatting utilities
+│   ├── cleaner.py       # Output formatting
 │   ├── setup.sh         # Installation script
 │   ├── run.sh           # Run script
-│   ├── requirements.txt # Python dependencies
-│   └── .env             # Environment variables (create this)
-├── docs/
-│   └── self-hosted.md   # Detailed documentation
+│   └── .env             # Environment variables
+├── assets/
+│   ├── architecture.png
+│   └── security_flow.png
 └── README.md
 ```
 
 ## Troubleshooting
 
 ### Bot not responding to DMs
-
-1. Check **Event Subscriptions** → `message.im` is subscribed
-2. Check **App Home** → Messages Tab is enabled
-3. Verify Socket Mode is enabled and connected
+- Check **Event Subscriptions** → `message.im` is subscribed
+- Check **App Home** → Messages Tab is enabled
 
 ### Image upload failing
+- Add `files:write` scope and reinstall app
 
-1. Add `files:write` scope in OAuth & Permissions
-2. Click **"Reinstall App"** after adding scope
-
-### "missing_scope" error
-
-1. Add the required scope mentioned in the error
-2. Reinstall the app to your workspace
-3. Restart the bot
-
-### Path approval not working
-
-1. Enable **Interactivity** in Slack App settings
-2. Socket Mode handles this automatically - no URL needed
+### Path approval buttons not working
+- Enable **Interactivity** in Slack App settings
 
 ## License
 
