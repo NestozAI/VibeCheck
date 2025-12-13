@@ -3,15 +3,19 @@ Claude Code Bridge Bot
 - Slack에서 Claude Code CLI를 원격 제어
 - subprocess로 CLI 실행 (--print 모드)
 - --continue로 대화 유지
+- 🛡️ 경로 기반 보안 승인 시스템
 """
 
 import os
 import re
+import glob
+import json
 import time
 import logging
 import threading
 import subprocess
-from typing import Optional
+import uuid
+from typing import Optional, List, Set, Dict, Any
 from dotenv import load_dotenv
 
 from slack_bolt import App
@@ -44,6 +48,127 @@ if not SLACK_APP_TOKEN:
 
 # Slack 앱 초기화
 app = App(token=SLACK_BOT_TOKEN)
+
+
+# =============================================================================
+# 🛡️ 보안 시스템: 신뢰 경로 & 승인 대기
+# =============================================================================
+
+# 신뢰할 수 있는 경로 (화이트리스트)
+TRUSTED_PATHS: Set[str] = {WORK_DIR}  # 기본 작업 디렉토리는 신뢰
+
+# 안전한 읽기 전용 시스템 명령어 (승인 없이 실행 가능)
+SAFE_SYSTEM_COMMANDS = {
+    'nvidia-smi', 'df', 'free', 'uptime', 'whoami', 'hostname',
+    'cat /proc/cpuinfo', 'cat /proc/meminfo', 'ps', 'top -bn1',
+    'ls', 'pwd', 'date', 'which', 'echo'
+}
+
+# 승인 대기 중인 작업들 (task_id -> task_info)
+pending_tasks: Dict[str, Dict[str, Any]] = {}
+
+# Lock for thread safety
+trusted_paths_lock = threading.Lock()
+pending_tasks_lock = threading.Lock()
+
+
+def normalize_path(path: str) -> str:
+    """경로 정규화"""
+    return os.path.normpath(os.path.abspath(os.path.expanduser(path)))
+
+
+def is_path_trusted(path: str) -> bool:
+    """경로가 신뢰할 수 있는지 확인"""
+    normalized = normalize_path(path)
+    with trusted_paths_lock:
+        for trusted in TRUSTED_PATHS:
+            trusted_norm = normalize_path(trusted)
+            # 신뢰 경로 또는 그 하위 경로인 경우
+            if normalized == trusted_norm or normalized.startswith(trusted_norm + os.sep):
+                return True
+    return False
+
+
+def add_trusted_path(path: str) -> None:
+    """신뢰 경로 추가"""
+    normalized = normalize_path(path)
+    with trusted_paths_lock:
+        TRUSTED_PATHS.add(normalized)
+        logger.info(f"🔓 신뢰 경로 추가: {normalized}")
+
+
+def remove_trusted_path(path: str) -> bool:
+    """신뢰 경로 제거"""
+    normalized = normalize_path(path)
+    with trusted_paths_lock:
+        if normalized in TRUSTED_PATHS and normalized != normalize_path(WORK_DIR):
+            TRUSTED_PATHS.remove(normalized)
+            logger.info(f"🔒 신뢰 경로 제거: {normalized}")
+            return True
+    return False
+
+
+def get_trusted_paths() -> List[str]:
+    """신뢰 경로 목록 반환"""
+    with trusted_paths_lock:
+        return sorted(list(TRUSTED_PATHS))
+
+
+def extract_paths_from_message(message: str) -> List[str]:
+    """메시지에서 경로 추출"""
+    paths = []
+
+    # 절대 경로 패턴 (/로 시작)
+    abs_pattern = r'(/[a-zA-Z0-9_\-./]+)'
+    abs_matches = re.findall(abs_pattern, message)
+    paths.extend(abs_matches)
+
+    # 상대 경로 패턴 (./나 ../ 로 시작)
+    rel_pattern = r'(\.\./[a-zA-Z0-9_\-./]+|\.\/[a-zA-Z0-9_\-./]+)'
+    rel_matches = re.findall(rel_pattern, message)
+    paths.extend(rel_matches)
+
+    # 파일 확장자가 있는 패턴
+    file_pattern = r'([a-zA-Z0-9_\-./]+\.[a-zA-Z0-9]+)'
+    file_matches = re.findall(file_pattern, message)
+    paths.extend(file_matches)
+
+    # 중복 제거 및 정규화
+    unique_paths = []
+    seen = set()
+    for p in paths:
+        # 확장자만 있는 것 제외 (예: .png)
+        if p.startswith('.') and '/' not in p:
+            continue
+        normalized = normalize_path(p) if p.startswith('/') else p
+        if normalized not in seen:
+            seen.add(normalized)
+            unique_paths.append(p)
+
+    return unique_paths
+
+
+def check_untrusted_paths(message: str) -> List[str]:
+    """메시지에서 신뢰되지 않은 경로 찾기"""
+    paths = extract_paths_from_message(message)
+    untrusted = []
+
+    for path in paths:
+        # 절대 경로만 검사
+        if path.startswith('/'):
+            if not is_path_trusted(path):
+                untrusted.append(path)
+
+    return untrusted
+
+
+def is_safe_system_command(message: str) -> bool:
+    """안전한 시스템 명령어인지 확인"""
+    msg_lower = message.lower().strip()
+    for cmd in SAFE_SYSTEM_COMMANDS:
+        if cmd in msg_lower:
+            return True
+    return False
 
 
 # =============================================================================
@@ -135,6 +260,147 @@ class ClaudeRunner:
 # 전역 Claude 실행기
 claude_runner: Optional[ClaudeRunner] = None
 
+# =============================================================================
+# 이미지 감지 및 업로드
+# =============================================================================
+
+IMAGE_EXTENSIONS = {'.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.bmp'}
+
+def get_existing_images(work_dir: str) -> Set[str]:
+    """작업 디렉토리의 기존 이미지 파일 목록 반환"""
+    existing = set()
+    for ext in IMAGE_EXTENSIONS:
+        existing.update(glob.glob(os.path.join(work_dir, f'*{ext}')))
+        existing.update(glob.glob(os.path.join(work_dir, f'**/*{ext}'), recursive=True))
+    return existing
+
+def find_new_images(work_dir: str, before_images: Set[str]) -> List[str]:
+    """새로 생성된 이미지 파일 찾기"""
+    after_images = get_existing_images(work_dir)
+    new_images = after_images - before_images
+    return list(new_images)
+
+def upload_images_to_slack(client, channel: str, thread_ts: str, image_paths: List[str]):
+    """이미지들을 Slack에 업로드"""
+    for image_path in image_paths:
+        try:
+            filename = os.path.basename(image_path)
+            logger.info(f"이미지 업로드 중: {filename}")
+
+            client.files_upload_v2(
+                channel=channel,
+                file=image_path,
+                filename=filename,
+                title=filename,
+                thread_ts=thread_ts,
+                initial_comment=f"📊 생성된 이미지: `{filename}`"
+            )
+            logger.info(f"이미지 업로드 완료: {filename}")
+        except Exception as e:
+            logger.error(f"이미지 업로드 실패 ({image_path}): {e}")
+
+
+# =============================================================================
+# Block Kit UI 빌더
+# =============================================================================
+
+def build_approval_blocks(task_id: str, untrusted_paths: List[str], user_message: str) -> List[dict]:
+    """경로 승인 요청 Block Kit UI"""
+    path_list = "\n".join([f"• `{p}`" for p in untrusted_paths])
+
+    return [
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": f"⚠️ *보안 경고*\n\nAI가 다음 경로에 접근하려고 합니다:\n{path_list}"
+            }
+        },
+        {
+            "type": "context",
+            "elements": [
+                {
+                    "type": "mrkdwn",
+                    "text": f"📝 요청: _{user_message[:100]}{'...' if len(user_message) > 100 else ''}_"
+                }
+            ]
+        },
+        {
+            "type": "actions",
+            "elements": [
+                {
+                    "type": "button",
+                    "text": {"type": "plain_text", "text": "✅ 승인 및 실행", "emoji": True},
+                    "style": "primary",
+                    "action_id": "approve_access",
+                    "value": task_id
+                },
+                {
+                    "type": "button",
+                    "text": {"type": "plain_text", "text": "✅ 승인 (영구)", "emoji": True},
+                    "action_id": "approve_permanent",
+                    "value": task_id
+                },
+                {
+                    "type": "button",
+                    "text": {"type": "plain_text", "text": "❌ 거절", "emoji": True},
+                    "style": "danger",
+                    "action_id": "deny_access",
+                    "value": task_id
+                }
+            ]
+        }
+    ]
+
+
+def build_trusted_paths_blocks() -> List[dict]:
+    """신뢰 경로 목록 Block Kit UI"""
+    paths = get_trusted_paths()
+
+    blocks = [
+        {
+            "type": "header",
+            "text": {"type": "plain_text", "text": "🔐 신뢰할 수 있는 경로 목록", "emoji": True}
+        },
+        {"type": "divider"}
+    ]
+
+    if not paths:
+        blocks.append({
+            "type": "section",
+            "text": {"type": "mrkdwn", "text": "_등록된 경로가 없습니다._"}
+        })
+    else:
+        for path in paths:
+            is_default = (normalize_path(path) == normalize_path(WORK_DIR))
+            blocks.append({
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": f"📁 `{path}`" + (" _(기본)_" if is_default else "")
+                },
+                "accessory": {
+                    "type": "button",
+                    "text": {"type": "plain_text", "text": "🗑️ 제거", "emoji": True},
+                    "style": "danger",
+                    "action_id": "remove_trusted_path",
+                    "value": path
+                } if not is_default else None
+            })
+            # None accessory 제거
+            if blocks[-1]["accessory"] is None:
+                del blocks[-1]["accessory"]
+
+    blocks.append({"type": "divider"})
+    blocks.append({
+        "type": "context",
+        "elements": [
+            {"type": "mrkdwn", "text": "💡 새 경로 추가: `/trust /path/to/folder`"}
+        ]
+    })
+
+    return blocks
+
 
 # =============================================================================
 # Slack 이벤트 핸들러
@@ -147,7 +413,7 @@ def extract_message_text(event: dict) -> str:
     return text
 
 
-def process_and_reply(say, thread_ts: str, user_message: str):
+def process_and_reply(say, thread_ts: str, user_message: str, client=None, channel: str = None, user_id: str = None):
     """Claude 실행하고 응답 전송"""
     global claude_runner
 
@@ -170,13 +436,56 @@ def process_and_reply(say, thread_ts: str, user_message: str):
             "• 대화는 자동으로 이어집니다\n\n"
             "*명령어:*\n"
             "• `리셋` 또는 `/reset` - 새 대화 시작\n"
-            "• `도움말` 또는 `/help` - 이 도움말\n\n"
+            "• `도움말` 또는 `/help` - 이 도움말\n"
+            "• `/paths` - 신뢰 경로 목록 보기\n"
+            "• `/trust /path` - 경로 신뢰 목록에 추가\n\n"
             f"*작업 디렉토리:* `{WORK_DIR}`"
         ), thread_ts=thread_ts)
         return
 
+    if msg_lower == "/paths" or msg_lower == "경로":
+        blocks = build_trusted_paths_blocks()
+        say(blocks=blocks, text="신뢰 경로 목록", thread_ts=thread_ts)
+        return
+
+    if msg_lower.startswith("/trust "):
+        path = user_message[7:].strip()
+        if path:
+            add_trusted_path(path)
+            say(text=f"✅ 신뢰 경로에 추가되었습니다: `{path}`", thread_ts=thread_ts)
+        else:
+            say(text="❌ 경로를 입력해주세요. 예: `/trust /home/user/project`", thread_ts=thread_ts)
+        return
+
+    # 🛡️ 보안 검사: 신뢰되지 않은 경로 확인
+    untrusted_paths = check_untrusted_paths(user_message)
+
+    # 안전한 시스템 명령어는 통과
+    if untrusted_paths and not is_safe_system_command(user_message):
+        # 승인 필요
+        task_id = str(uuid.uuid4())[:8]
+
+        with pending_tasks_lock:
+            pending_tasks[task_id] = {
+                "message": user_message,
+                "thread_ts": thread_ts,
+                "channel": channel,
+                "user_id": user_id,
+                "untrusted_paths": untrusted_paths,
+                "timestamp": time.time()
+            }
+
+        logger.info(f"🛡️ 승인 대기: {task_id} - 경로: {untrusted_paths}")
+
+        blocks = build_approval_blocks(task_id, untrusted_paths, user_message)
+        say(blocks=blocks, text="보안 승인 필요", thread_ts=thread_ts)
+        return
+
     # 처리 중 메시지
     say(text="⏳ Claude가 생각하는 중...", thread_ts=thread_ts)
+
+    # Claude 실행 전 기존 이미지 목록 저장
+    before_images = get_existing_images(WORK_DIR)
 
     # Claude 실행
     response = claude_runner.run(user_message)
@@ -192,6 +501,74 @@ def process_and_reply(say, thread_ts: str, user_message: str):
     else:
         say(text="🤔 Claude가 응답하지 않았습니다.", thread_ts=thread_ts)
 
+    # 새로 생성된 이미지 확인 및 업로드
+    if client and channel:
+        new_images = find_new_images(WORK_DIR, before_images)
+        if new_images:
+            logger.info(f"새 이미지 발견: {new_images}")
+            upload_images_to_slack(client, channel, thread_ts, new_images)
+
+
+def execute_pending_task(task_id: str, client, permanent: bool = False):
+    """대기 중인 작업 실행"""
+    global claude_runner
+
+    with pending_tasks_lock:
+        task = pending_tasks.pop(task_id, None)
+
+    if not task:
+        logger.warning(f"작업을 찾을 수 없음: {task_id}")
+        return
+
+    # 영구 승인이면 경로 추가
+    if permanent:
+        for path in task["untrusted_paths"]:
+            add_trusted_path(path)
+
+    channel = task["channel"]
+    thread_ts = task["thread_ts"]
+    user_message = task["message"]
+
+    if not claude_runner:
+        claude_runner = ClaudeRunner(WORK_DIR)
+
+    # 실행 알림
+    client.chat_postMessage(
+        channel=channel,
+        thread_ts=thread_ts,
+        text="⏳ 승인됨! Claude가 실행 중..."
+    )
+
+    # Claude 실행 전 기존 이미지 목록 저장
+    before_images = get_existing_images(WORK_DIR)
+
+    # Claude 실행
+    response = claude_runner.run(user_message)
+
+    # 응답 정제 및 전송
+    cleaned = clean_output(response)
+    if cleaned:
+        messages = clean_and_split(cleaned)
+        for msg in messages:
+            if msg.strip():
+                client.chat_postMessage(
+                    channel=channel,
+                    thread_ts=thread_ts,
+                    text=msg
+                )
+    else:
+        client.chat_postMessage(
+            channel=channel,
+            thread_ts=thread_ts,
+            text="🤔 Claude가 응답하지 않았습니다."
+        )
+
+    # 새로 생성된 이미지 확인 및 업로드
+    new_images = find_new_images(WORK_DIR, before_images)
+    if new_images:
+        logger.info(f"새 이미지 발견: {new_images}")
+        upload_images_to_slack(client, channel, thread_ts, new_images)
+
 
 @app.event("app_mention")
 def handle_mention(event, say, client):
@@ -200,12 +577,14 @@ def handle_mention(event, say, client):
 
     user_message = extract_message_text(event)
     thread_ts = event.get("thread_ts", event.get("ts"))
+    channel = event.get("channel")
+    user_id = event.get("user")
 
     if not user_message:
         say(text="무엇을 도와드릴까요? 🤔", thread_ts=thread_ts)
         return
 
-    process_and_reply(say, thread_ts, user_message)
+    process_and_reply(say, thread_ts, user_message, client=client, channel=channel, user_id=user_id)
 
 
 @app.event("message")
@@ -226,8 +605,122 @@ def handle_message(event, say, client):
         return
 
     thread_ts = event.get("thread_ts", event.get("ts"))
+    channel = event.get("channel")
+    user_id = event.get("user")
 
-    process_and_reply(say, thread_ts, user_message)
+    process_and_reply(say, thread_ts, user_message, client=client, channel=channel, user_id=user_id)
+
+
+# =============================================================================
+# 버튼 액션 핸들러
+# =============================================================================
+
+@app.action("approve_access")
+def handle_approve_access(ack, body, client):
+    """일회성 승인"""
+    ack()
+
+    task_id = body["actions"][0]["value"]
+    user = body["user"]["username"]
+
+    logger.info(f"✅ 승인됨 (일회성): {task_id} by {user}")
+
+    # 버튼 메시지 업데이트
+    client.chat_update(
+        channel=body["channel"]["id"],
+        ts=body["message"]["ts"],
+        text=f"✅ 승인됨 (일회성) by @{user}",
+        blocks=[
+            {
+                "type": "section",
+                "text": {"type": "mrkdwn", "text": f"✅ *승인됨* (일회성) by @{user}"}
+            }
+        ]
+    )
+
+    # 작업 실행
+    execute_pending_task(task_id, client, permanent=False)
+
+
+@app.action("approve_permanent")
+def handle_approve_permanent(ack, body, client):
+    """영구 승인 (경로 추가)"""
+    ack()
+
+    task_id = body["actions"][0]["value"]
+    user = body["user"]["username"]
+
+    logger.info(f"✅ 승인됨 (영구): {task_id} by {user}")
+
+    # 버튼 메시지 업데이트
+    client.chat_update(
+        channel=body["channel"]["id"],
+        ts=body["message"]["ts"],
+        text=f"✅ 승인됨 (영구) by @{user}",
+        blocks=[
+            {
+                "type": "section",
+                "text": {"type": "mrkdwn", "text": f"✅ *승인됨* (영구 - 경로 신뢰 목록 추가) by @{user}"}
+            }
+        ]
+    )
+
+    # 작업 실행 (영구 승인)
+    execute_pending_task(task_id, client, permanent=True)
+
+
+@app.action("deny_access")
+def handle_deny_access(ack, body, client):
+    """접근 거절"""
+    ack()
+
+    task_id = body["actions"][0]["value"]
+    user = body["user"]["username"]
+
+    logger.info(f"❌ 거절됨: {task_id} by {user}")
+
+    # 대기 작업 제거
+    with pending_tasks_lock:
+        pending_tasks.pop(task_id, None)
+
+    # 버튼 메시지 업데이트
+    client.chat_update(
+        channel=body["channel"]["id"],
+        ts=body["message"]["ts"],
+        text=f"❌ 거절됨 by @{user}",
+        blocks=[
+            {
+                "type": "section",
+                "text": {"type": "mrkdwn", "text": f"❌ *거절됨* by @{user}"}
+            }
+        ]
+    )
+
+
+@app.action("remove_trusted_path")
+def handle_remove_trusted_path(ack, body, client):
+    """신뢰 경로 제거"""
+    ack()
+
+    path = body["actions"][0]["value"]
+    user = body["user"]["username"]
+
+    if remove_trusted_path(path):
+        logger.info(f"🗑️ 경로 제거됨: {path} by {user}")
+
+        # 업데이트된 목록 표시
+        blocks = build_trusted_paths_blocks()
+        client.chat_update(
+            channel=body["channel"]["id"],
+            ts=body["message"]["ts"],
+            text="신뢰 경로 목록",
+            blocks=blocks
+        )
+    else:
+        client.chat_postMessage(
+            channel=body["channel"]["id"],
+            text=f"❌ 기본 경로는 제거할 수 없습니다: `{path}`"
+        )
 
 
 @app.event("app_home_opened")
@@ -236,6 +729,7 @@ def handle_app_home(event, client):
     user_id = event["user"]
 
     session_status = "✅ 대화 진행 중" if (claude_runner and claude_runner.session_started) else "🆕 새 대화"
+    trusted_count = len(get_trusted_paths())
 
     client.views_publish(
         user_id=user_id,
@@ -264,7 +758,7 @@ def handle_app_home(event, client):
                     "type": "section",
                     "text": {
                         "type": "mrkdwn",
-                        "text": f"*세션 상태:* {session_status}\n*작업 디렉토리:* `{WORK_DIR}`"
+                        "text": f"*세션 상태:* {session_status}\n*작업 디렉토리:* `{WORK_DIR}`\n*신뢰 경로:* {trusted_count}개"
                     }
                 },
                 {
@@ -280,7 +774,12 @@ def handle_app_home(event, client):
                                "• 대화는 `--continue`로 자동 이어집니다\n\n"
                                "*명령어:*\n"
                                "• `리셋` - 새 대화 시작\n"
-                               "• `도움말` - 도움말 보기"
+                               "• `도움말` - 도움말 보기\n"
+                               "• `/paths` - 신뢰 경로 목록\n"
+                               "• `/trust /path` - 경로 신뢰 추가\n\n"
+                               "*🛡️ 보안:*\n"
+                               "• 신뢰되지 않은 경로 접근 시 승인 요청됨\n"
+                               "• 시스템 모니터링 명령은 자동 허용"
                     }
                 }
             ]
@@ -299,6 +798,7 @@ def main():
     logger.info("=" * 50)
     logger.info("🚀 Claude Code Bridge Bot 시작!")
     logger.info(f"📂 작업 디렉토리: {WORK_DIR}")
+    logger.info(f"🔐 신뢰 경로: {get_trusted_paths()}")
     logger.info("=" * 50)
 
     # Claude 실행기 초기화
