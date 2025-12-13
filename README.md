@@ -19,11 +19,22 @@
 
 ## Quick Start
 
+### Linux / macOS
+
 ```bash
 git clone https://github.com/NestozAI/VibeCheck
 cd VibeCheck/self-hosted
 ./setup.sh
 ./run.sh
+```
+
+### Windows
+
+```cmd
+git clone https://github.com/NestozAI/VibeCheck
+cd VibeCheck\self-hosted
+setup.bat
+run.bat
 ```
 
 ## Slack App Setup
