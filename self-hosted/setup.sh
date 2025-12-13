@@ -63,7 +63,7 @@ conda activate $ENV_NAME
 # =============================================================================
 
 echo ""
-echo -e "${BLUE}[3/4]${NC} 의존성 설치..."
+echo -e "${BLUE}[3/5]${NC} 의존성 설치..."
 
 pip install --upgrade pip -q
 pip install -r requirements.txt -q
@@ -71,11 +71,22 @@ pip install -r requirements.txt -q
 echo -e "  ${GREEN}패키지 설치 완료${NC}"
 
 # =============================================================================
+# Playwright 브라우저 설치
+# =============================================================================
+
+echo ""
+echo -e "${BLUE}[4/5]${NC} Playwright 브라우저 설치 (UI 스크린샷용)..."
+
+playwright install chromium --with-deps 2>/dev/null || playwright install chromium
+
+echo -e "  ${GREEN}Playwright 설치 완료${NC}"
+
+# =============================================================================
 # 환경변수 설정 (bash로 직접 처리)
 # =============================================================================
 
 echo ""
-echo -e "${BLUE}[4/4]${NC} Slack 연동 설정"
+echo -e "${BLUE}[5/5]${NC} Slack 연동 설정"
 echo ""
 echo "=========================================="
 echo "  Slack App 토큰이 필요합니다."

@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VibeBot Cloud Waitlist</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Courier New', Courier, monospace;
+            background-color: #2C2D30;
+            color: #39FF14;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            position: relative;
+        }
+
+        /* Scanline effect */
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: repeating-linear-gradient(
+                0deg,
+                rgba(0, 0, 0, 0.1) 0px,
+                rgba(0, 0, 0, 0.1) 1px,
+                transparent 1px,
+                transparent 2px
+            );
+            pointer-events: none;
+            z-index: 1000;
+        }
+
+        .lang-toggle {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            font-size: 14px;
+            cursor: pointer;
+            padding: 8px 12px;
+            border: 1px solid #39FF14;
+            background: transparent;
+            color: #39FF14;
+            transition: all 0.3s ease;
+        }
+
+        .lang-toggle:hover {
+            background: #39FF14;
+            color: #2C2D30;
+            box-shadow: 0 0 20px #39FF14;
+        }
+
+        .lang-toggle .active {
+            text-decoration: underline;
+        }
+
+        .container {
+            text-align: center;
+            max-width: 600px;
+            width: 100%;
+        }
+
+        .hero {
+            font-size: 2.5rem;
+            font-weight: bold;
+            margin-bottom: 20px;
+            text-shadow: 0 0 10px #39FF14, 0 0 20px #39FF14;
+            animation: glow 2s ease-in-out infinite alternate;
+        }
+
+        @keyframes glow {
+            from {
+                text-shadow: 0 0 10px #39FF14, 0 0 20px #39FF14;
+            }
+            to {
+                text-shadow: 0 0 20px #39FF14, 0 0 40px #39FF14, 0 0 60px #39FF14;
+            }
+        }
+
+        .sub-hero {
+            font-size: 1.1rem;
+            color: #888;
+            margin-bottom: 40px;
+            line-height: 1.6;
+        }
+
+        .form-container {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            align-items: center;
+        }
+
+        .email-input {
+            width: 100%;
+            max-width: 400px;
+            padding: 15px 20px;
+            font-size: 1rem;
+            font-family: 'Courier New', Courier, monospace;
+            background: rgba(57, 255, 20, 0.05);
+            border: 1px solid #39FF14;
+            color: #39FF14;
+            outline: none;
+            transition: all 0.3s ease;
+        }
+
+        .email-input::placeholder {
+            color: rgba(57, 255, 20, 0.5);
+        }
+
+        .email-input:focus {
+            box-shadow: 0 0 15px rgba(57, 255, 20, 0.5);
+            background: rgba(57, 255, 20, 0.1);
+        }
+
+        .submit-btn {
+            padding: 15px 40px;
+            font-size: 1rem;
+            font-family: 'Courier New', Courier, monospace;
+            background: transparent;
+            border: 2px solid #39FF14;
+            color: #39FF14;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+
+        .submit-btn:hover {
+            background: #39FF14;
+            color: #2C2D30;
+            box-shadow: 0 0 30px #39FF14;
+        }
+
+        .submit-btn:active {
+            transform: scale(0.98);
+        }
+
+        .success-message {
+            display: none;
+            margin-top: 30px;
+            padding: 20px;
+            border: 1px solid #39FF14;
+            background: rgba(57, 255, 20, 0.1);
+            animation: fadeIn 0.5s ease;
+        }
+
+        .success-message.show {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .cursor-blink {
+            animation: blink 1s step-end infinite;
+        }
+
+        @keyframes blink {
+            50% {
+                opacity: 0;
+            }
+        }
+
+        /* Hidden iframe for form submission */
+        .hidden-iframe {
+            display: none;
+        }
+
+        /* Terminal cursor after hero */
+        .hero::after {
+            content: '_';
+            animation: blink 1s step-end infinite;
+        }
+
+        @media (max-width: 600px) {
+            .hero {
+                font-size: 1.8rem;
+            }
+
+            .sub-hero {
+                font-size: 1rem;
+            }
+
+            .email-input,
+            .submit-btn {
+                width: 100%;
+                max-width: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <button class="lang-toggle" onclick="toggleLanguage()">
+        [ <span id="en-toggle">EN</span> | <span id="kr-toggle">KR</span> ]
+    </button>
+
+    <div class="container">
+        <h1 class="hero" id="hero-text"></h1>
+        <p class="sub-hero" id="sub-hero-text"></p>
+
+        <form class="form-container" id="waitlist-form" target="hidden-iframe" method="POST"
+              action="https://docs.google.com/forms/d/e/1FAIpQLSfwmbyXbZR0_vqB4kpHPOxtTDPAutxAJgkffd26BFqzJM2CYg/formResponse">
+            <input type="email"
+                   name="entry.1828100471"
+                   class="email-input"
+                   id="email-input"
+                   required>
+            <button type="submit" class="submit-btn" id="submit-btn"></button>
+        </form>
+
+        <div class="success-message" id="success-message"></div>
+    </div>
+
+    <iframe name="hidden-iframe" class="hidden-iframe"></iframe>
+
+    <script>
+        // i18n content
+        const i18n = {
+            en: {
+                hero: "VibeBot Cloud Waitlist",
+                subHero: "SSH is dead. Talk to your server directly.",
+                placeholder: "Enter your email...",
+                button: "Request Access",
+                success: "Welcome to the resistance. You're on the list."
+            },
+            kr: {
+                hero: "VibeBot 클라우드 사전예약",
+                subHero: "더 이상 SSH는 필요 없습니다. 슬랙에서 서버와 대화하세요.",
+                placeholder: "이메일 주소를 입력하세요...",
+                button: "사전 알림 신청",
+                success: "환영합니다. 대기 명단에 등록되었습니다."
+            }
+        };
+
+        let currentLang = 'en';
+
+        // Detect browser language
+        function detectLanguage() {
+            const browserLang = navigator.language || navigator.userLanguage;
+            return browserLang.startsWith('ko') ? 'kr' : 'en';
+        }
+
+        // Update all text content
+        function updateContent(lang) {
+            currentLang = lang;
+            const content = i18n[lang];
+
+            document.getElementById('hero-text').textContent = content.hero;
+            document.getElementById('sub-hero-text').textContent = content.subHero;
+            document.getElementById('email-input').placeholder = content.placeholder;
+            document.getElementById('submit-btn').textContent = content.button;
+            document.getElementById('success-message').textContent = content.success;
+
+            // Update toggle button styling
+            document.getElementById('en-toggle').className = lang === 'en' ? 'active' : '';
+            document.getElementById('kr-toggle').className = lang === 'kr' ? 'active' : '';
+
+            // Update html lang attribute
+            document.documentElement.lang = lang === 'kr' ? 'ko' : 'en';
+        }
+
+        // Toggle language
+        function toggleLanguage() {
+            const newLang = currentLang === 'en' ? 'kr' : 'en';
+            updateContent(newLang);
+        }
+
+        // Handle form submission
+        document.getElementById('waitlist-form').addEventListener('submit', function(e) {
+            const emailInput = document.getElementById('email-input');
+            const successMessage = document.getElementById('success-message');
+
+            // Show success message after a brief delay
+            setTimeout(() => {
+                successMessage.classList.add('show');
+                emailInput.value = '';
+
+                // Hide success message after 5 seconds
+                setTimeout(() => {
+                    successMessage.classList.remove('show');
+                }, 5000);
+            }, 500);
+        });
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            const detectedLang = detectLanguage();
+            updateContent(detectedLang);
+        });
+    </script>
+</body>
+</html>

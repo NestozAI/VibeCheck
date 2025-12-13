@@ -280,7 +280,85 @@ def find_new_images(work_dir: str, before_images: Set[str]) -> List[str]:
     new_images = after_images - before_images
     return list(new_images)
 
-def upload_images_to_slack(client, channel: str, thread_ts: str, image_paths: List[str]):
+def extract_image_paths_from_response(response: str, work_dir: str) -> List[str]:
+    """Claude 응답에서 이미지 파일 경로 추출 (기존 파일만)"""
+    image_paths = []
+
+    # 이미지 확장자 패턴
+    ext_pattern = '|'.join([ext.replace('.', r'\.') for ext in IMAGE_EXTENSIONS])
+
+    # 절대 경로 패턴: /path/to/image.png
+    abs_pattern = rf'(/[a-zA-Z0-9_\-./]+(?:{ext_pattern}))'
+    abs_matches = re.findall(abs_pattern, response, re.IGNORECASE)
+
+    # 상대 경로 패턴: ./image.png, image.png, path/to/image.png
+    rel_pattern = rf'(?:^|[\s`\'"(])([a-zA-Z0-9_\-./]+(?:{ext_pattern}))'
+    rel_matches = re.findall(rel_pattern, response, re.IGNORECASE)
+
+    all_matches = abs_matches + rel_matches
+
+    for path in all_matches:
+        # 경로 정규화
+        if path.startswith('/'):
+            full_path = path
+        else:
+            full_path = os.path.join(work_dir, path)
+
+        full_path = os.path.normpath(full_path)
+
+        # 파일이 실제로 존재하는지 확인
+        if os.path.isfile(full_path) and full_path not in image_paths:
+            image_paths.append(full_path)
+
+    return image_paths
+
+
+def find_contextual_images(user_message: str, response: str, work_dir: str) -> List[str]:
+    """
+    사용자 요청과 Claude 응답 컨텍스트를 분석하여 관련 이미지 찾기
+    - "그래프 보여줘", "이미지 보여줘" 등의 요청 감지
+    - 응답에서 언급된 키워드로 이미지 매칭
+    """
+    image_paths = []
+
+    # 이미지 요청 키워드
+    request_keywords = ['그래프', 'graph', '이미지', 'image', '보여', 'show', '차트', 'chart', 'plot', '시각화']
+    combined_text = (user_message + ' ' + response).lower()
+
+    # 키워드가 있는지 확인
+    has_image_request = any(kw in combined_text for kw in request_keywords)
+
+    if not has_image_request:
+        return []
+
+    # 응답에서 힌트가 될 수 있는 키워드 추출
+    hint_patterns = [
+        (r'loss[_\s]?curve', 'loss_curve'),
+        (r'loss', 'loss'),
+        (r'training', 'training'),
+        (r'학습', 'loss'),
+        (r'그래프', 'graph'),
+        (r'chart', 'chart'),
+        (r'result', 'result'),
+    ]
+
+    # work_dir에서 이미지 파일 찾기
+    all_images = get_existing_images(work_dir)
+
+    for img_path in all_images:
+        filename = os.path.basename(img_path).lower()
+
+        # 힌트 패턴 매칭
+        for pattern, hint in hint_patterns:
+            if re.search(pattern, combined_text, re.IGNORECASE):
+                if hint in filename or pattern.replace(r'[_\s]?', '').replace('\\', '') in filename:
+                    if img_path not in image_paths:
+                        image_paths.append(img_path)
+                        break
+
+    return image_paths
+
+def upload_images_to_slack(client, channel: str, thread_ts: str, image_paths: List[str], comment_prefix: str = "📊 생성된 이미지"):
     """이미지들을 Slack에 업로드"""
     for image_path in image_paths:
         try:
@@ -293,7 +371,7 @@ def upload_images_to_slack(client, channel: str, thread_ts: str, image_paths: Li
                 filename=filename,
                 title=filename,
                 thread_ts=thread_ts,
-                initial_comment=f"📊 생성된 이미지: `{filename}`"
+                initial_comment=f"{comment_prefix}: `{filename}`"
             )
             logger.info(f"이미지 업로드 완료: {filename}")
         except Exception as e:
@@ -347,6 +425,30 @@ def build_approval_blocks(task_id: str, untrusted_paths: List[str], user_message
                     "style": "danger",
                     "action_id": "deny_access",
                     "value": task_id
+                }
+            ]
+        }
+    ]
+
+
+def build_message_with_delete_button(text: str, message_id: str = None) -> List[dict]:
+    """삭제 버튼이 있는 메시지 블록 생성"""
+    if not message_id:
+        message_id = str(uuid.uuid4())[:8]
+
+    return [
+        {
+            "type": "section",
+            "text": {"type": "mrkdwn", "text": text}
+        },
+        {
+            "type": "actions",
+            "elements": [
+                {
+                    "type": "button",
+                    "text": {"type": "plain_text", "text": "🗑️", "emoji": True},
+                    "action_id": "delete_message",
+                    "value": message_id
                 }
             ]
         }
@@ -482,13 +584,20 @@ def process_and_reply(say, thread_ts: str, user_message: str, client=None, chann
         return
 
     # 처리 중 메시지
-    say(text="⏳ Claude가 생각하는 중...", thread_ts=thread_ts)
+    thinking_msg = say(text="⏳ Claude가 생각하는 중...", thread_ts=thread_ts)
 
     # Claude 실행 전 기존 이미지 목록 저장
     before_images = get_existing_images(WORK_DIR)
 
     # Claude 실행
     response = claude_runner.run(user_message)
+
+    # "생각하는 중" 메시지 삭제
+    if thinking_msg and client and channel:
+        try:
+            client.chat_delete(channel=channel, ts=thinking_msg.get("ts"))
+        except Exception as e:
+            logger.warning(f"생각 중 메시지 삭제 실패: {e}")
 
     # 응답 정제 및 전송
     cleaned = clean_output(response)
@@ -497,16 +606,38 @@ def process_and_reply(say, thread_ts: str, user_message: str, client=None, chann
         messages = clean_and_split(cleaned)
         for msg in messages:
             if msg.strip():
-                say(text=msg, thread_ts=thread_ts)
+                # 삭제 버튼과 함께 메시지 전송
+                blocks = build_message_with_delete_button(msg)
+                say(blocks=blocks, text=msg, thread_ts=thread_ts)
     else:
         say(text="🤔 Claude가 응답하지 않았습니다.", thread_ts=thread_ts)
 
-    # 새로 생성된 이미지 확인 및 업로드
+    # 이미지 업로드 처리
     if client and channel:
+        uploaded_images = set()
+
+        # 1. 새로 생성된 이미지 업로드
         new_images = find_new_images(WORK_DIR, before_images)
         if new_images:
             logger.info(f"새 이미지 발견: {new_images}")
-            upload_images_to_slack(client, channel, thread_ts, new_images)
+            upload_images_to_slack(client, channel, thread_ts, new_images, "📊 생성된 이미지")
+            uploaded_images.update(new_images)
+
+        # 2. 응답에서 언급된 기존 이미지 업로드
+        mentioned_images = extract_image_paths_from_response(response, WORK_DIR)
+        # 이미 업로드된 이미지 제외
+        mentioned_images = [img for img in mentioned_images if img not in uploaded_images]
+        if mentioned_images:
+            logger.info(f"응답에서 언급된 이미지: {mentioned_images}")
+            upload_images_to_slack(client, channel, thread_ts, mentioned_images, "📎 참조된 이미지")
+            uploaded_images.update(mentioned_images)
+
+        # 3. 컨텍스트 기반 이미지 찾기 (그래프 보여줘 등)
+        contextual_images = find_contextual_images(user_message, response, WORK_DIR)
+        contextual_images = [img for img in contextual_images if img not in uploaded_images]
+        if contextual_images:
+            logger.info(f"컨텍스트 기반 이미지: {contextual_images}")
+            upload_images_to_slack(client, channel, thread_ts, contextual_images, "📎 관련 이미지")
 
 
 def execute_pending_task(task_id: str, client, permanent: bool = False):
@@ -551,9 +682,12 @@ def execute_pending_task(task_id: str, client, permanent: bool = False):
         messages = clean_and_split(cleaned)
         for msg in messages:
             if msg.strip():
+                # 삭제 버튼과 함께 메시지 전송
+                blocks = build_message_with_delete_button(msg)
                 client.chat_postMessage(
                     channel=channel,
                     thread_ts=thread_ts,
+                    blocks=blocks,
                     text=msg
                 )
     else:
@@ -563,11 +697,30 @@ def execute_pending_task(task_id: str, client, permanent: bool = False):
             text="🤔 Claude가 응답하지 않았습니다."
         )
 
-    # 새로 생성된 이미지 확인 및 업로드
+    # 이미지 업로드 처리
+    uploaded_images = set()
+
+    # 1. 새로 생성된 이미지 업로드
     new_images = find_new_images(WORK_DIR, before_images)
     if new_images:
         logger.info(f"새 이미지 발견: {new_images}")
-        upload_images_to_slack(client, channel, thread_ts, new_images)
+        upload_images_to_slack(client, channel, thread_ts, new_images, "📊 생성된 이미지")
+        uploaded_images.update(new_images)
+
+    # 2. 응답에서 언급된 기존 이미지 업로드
+    mentioned_images = extract_image_paths_from_response(response, WORK_DIR)
+    mentioned_images = [img for img in mentioned_images if img not in uploaded_images]
+    if mentioned_images:
+        logger.info(f"응답에서 언급된 이미지: {mentioned_images}")
+        upload_images_to_slack(client, channel, thread_ts, mentioned_images, "📎 참조된 이미지")
+        uploaded_images.update(mentioned_images)
+
+    # 3. 컨텍스트 기반 이미지 찾기
+    contextual_images = find_contextual_images(user_message, response, WORK_DIR)
+    contextual_images = [img for img in contextual_images if img not in uploaded_images]
+    if contextual_images:
+        logger.info(f"컨텍스트 기반 이미지: {contextual_images}")
+        upload_images_to_slack(client, channel, thread_ts, contextual_images, "📎 관련 이미지")
 
 
 @app.event("app_mention")
@@ -721,6 +874,31 @@ def handle_remove_trusted_path(ack, body, client):
             channel=body["channel"]["id"],
             text=f"❌ 기본 경로는 제거할 수 없습니다: `{path}`"
         )
+
+
+@app.action("delete_message")
+def handle_delete_message(ack, body, client):
+    """메시지 삭제"""
+    ack()
+
+    channel = body["channel"]["id"]
+    message_ts = body["message"]["ts"]
+    user = body["user"]["username"]
+
+    try:
+        client.chat_delete(channel=channel, ts=message_ts)
+        logger.info(f"🗑️ 메시지 삭제됨: {message_ts} by {user}")
+    except Exception as e:
+        logger.error(f"메시지 삭제 실패: {e}")
+        # 삭제 실패 시 사용자에게 알림
+        try:
+            client.chat_postEphemeral(
+                channel=channel,
+                user=body["user"]["id"],
+                text=f"❌ 메시지 삭제 실패: {str(e)}"
+            )
+        except:
+            pass
 
 
 @app.event("app_home_opened")
