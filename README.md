@@ -30,6 +30,12 @@ With VibeCheck Cloud, connect to Slack once and start using it immediately. (No 
 
 ![Architecture](./assets/architecture.png)
 
+## Demo
+
+![UX Demo](./assets/ux_demo.png)
+
+*Ask VibeCheck to render UI, modify designs, and get instant visual feedback - all from Slack.*
+
 ## Features
 
 - **Natural Language Coding** - Chat with AI to write, modify, and execute code

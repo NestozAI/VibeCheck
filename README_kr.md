@@ -30,6 +30,12 @@ VibeCheck Cloud를 사용하면 Slack 한 번 연결로 바로 사용할 수 있
 
 ![Architecture](./assets/architecture.png)
 
+## 데모
+
+![UX Demo](./assets/ux_demo.png)
+
+*VibeCheck에 UI 렌더링을 요청하고, 디자인을 수정하고, Slack에서 바로 시각적 피드백을 받으세요.*
+
 ## 주요 기능
 
 - **자연어 코딩** - AI와 대화하며 코드 작성, 수정, 실행
