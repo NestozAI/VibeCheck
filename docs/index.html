@@ -92,8 +92,28 @@
         .sub-hero {
             font-size: 1.1rem;
             color: #888;
-            margin-bottom: 40px;
+            margin-bottom: 15px;
             line-height: 1.6;
+        }
+
+        .bonus-text {
+            font-size: 1rem;
+            color: #FFD700;
+            margin-bottom: 40px;
+            padding: 10px 20px;
+            border: 1px solid #FFD700;
+            display: inline-block;
+            text-shadow: 0 0 5px #FFD700;
+            animation: bonusPulse 2s ease-in-out infinite alternate;
+        }
+
+        @keyframes bonusPulse {
+            from {
+                box-shadow: 0 0 5px rgba(255, 215, 0, 0.3);
+            }
+            to {
+                box-shadow: 0 0 15px rgba(255, 215, 0, 0.6);
+            }
         }
 
         .form-container {
@@ -218,6 +238,7 @@
     <div class="container">
         <h1 class="hero" id="hero-text"></h1>
         <p class="sub-hero" id="sub-hero-text"></p>
+        <p class="bonus-text" id="bonus-text"></p>
 
         <form class="form-container" id="waitlist-form" target="hidden-iframe" method="POST"
               action="https://docs.google.com/forms/d/e/1FAIpQLSfwmbyXbZR0_vqB4kpHPOxtTDPAutxAJgkffd26BFqzJM2CYg/formResponse">
@@ -240,6 +261,7 @@
             en: {
                 hero: "VibeCheck Cloud Waitlist",
                 subHero: "SSH is dead. Talk to your server directly.",
+                bonus: "Join now and get 1 month free when we launch.",
                 placeholder: "Enter your email...",
                 button: "Request Access",
                 success: "Welcome to the resistance. You're on the list."
@@ -247,6 +269,7 @@
             kr: {
                 hero: "VibeCheck 클라우드 사전예약",
                 subHero: "더 이상 SSH는 필요 없습니다. 슬랙에서 서버와 대화하세요.",
+                bonus: "지금 사전예약하시면 출시 시 1개월 무료!",
                 placeholder: "이메일 주소를 입력하세요...",
                 button: "사전 알림 신청",
                 success: "환영합니다. 대기 명단에 등록되었습니다."
@@ -268,6 +291,7 @@
 
             document.getElementById('hero-text').textContent = content.hero;
             document.getElementById('sub-hero-text').textContent = content.subHero;
+            document.getElementById('bonus-text').textContent = content.bonus;
             document.getElementById('email-input').placeholder = content.placeholder;
             document.getElementById('submit-btn').textContent = content.button;
             document.getElementById('success-message').textContent = content.success;
