@@ -1,8 +1,8 @@
 [phases.setup]
-nixPkgs = ["python311"]
+nixPkgs = ["python311", "python311Packages.pip"]
 
 [phases.install]
-cmds = ["pip install -r requirements.txt"]
+cmds = ["cd cloud/server && pip install -r requirements.txt"]
 
 [start]
-cmd = "python -m uvicorn app:app --host 0.0.0.0 --port ${PORT:-8080}"
+cmd = "cd cloud/server && python -m uvicorn app:app --host 0.0.0.0 --port ${PORT:-8080}"

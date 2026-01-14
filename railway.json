@@ -2,7 +2,7 @@
   "$schema": "https://railway.app/railway.schema.json",
   "build": {
     "builder": "NIXPACKS",
-    "buildCommand": "cd cloud/server && pip install -r requirements.txt"
+    "nixpacksConfigPath": "cloud/server/nixpacks.toml"
   },
   "deploy": {
     "startCommand": "cd cloud/server && python -m uvicorn app:app --host 0.0.0.0 --port $PORT",
