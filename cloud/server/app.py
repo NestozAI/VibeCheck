@@ -301,35 +301,396 @@ async def root():
     <!DOCTYPE html>
     <html>
     <head>
-        <title>VibeCheck</title>
+        <title>VibeCheck - Slack에서 Claude Code 원격 제어</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1">
         <style>
+            * {{ box-sizing: border-box; margin: 0; padding: 0; }}
             body {{
                 font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-                max-width: 600px;
-                margin: 100px auto;
-                padding: 20px;
-                text-align: center;
+                background: #0a0a0a;
+                color: #e0e0e0;
+                line-height: 1.6;
             }}
-            h1 {{ color: #1a1a1a; }}
-            p {{ color: #666; line-height: 1.6; }}
+            .container {{
+                max-width: 1000px;
+                margin: 0 auto;
+                padding: 0 24px;
+            }}
+
+            /* Hero Section */
+            .hero {{
+                text-align: center;
+                padding: 80px 0 60px;
+                position: relative;
+            }}
+            .hero::before {{
+                content: '';
+                position: absolute;
+                top: 0;
+                left: 50%;
+                transform: translateX(-50%);
+                width: 600px;
+                height: 400px;
+                background: radial-gradient(ellipse, rgba(0,255,0,0.1) 0%, transparent 70%);
+                pointer-events: none;
+            }}
+            .logo-img {{
+                width: 120px;
+                height: 120px;
+                margin-bottom: 24px;
+                filter: drop-shadow(0 0 20px rgba(0,255,0,0.5));
+            }}
+            .logo {{
+                font-size: 3.5rem;
+                font-weight: 800;
+                color: #00ff00;
+                text-shadow: 0 0 30px rgba(0,255,0,0.5);
+                margin-bottom: 24px;
+            }}
+            .tagline {{
+                font-size: 1.5rem;
+                color: #888;
+                margin-bottom: 16px;
+            }}
+            .tagline strong {{
+                color: #00ff00;
+            }}
+            .description {{
+                font-size: 1.1rem;
+                color: #666;
+                max-width: 600px;
+                margin: 0 auto 32px;
+            }}
             .btn {{
                 display: inline-block;
-                background: #4A154B;
-                color: white;
-                padding: 12px 24px;
+                background: #00ff00;
+                color: #0a0a0a;
+                padding: 16px 40px;
                 border-radius: 8px;
                 text-decoration: none;
-                margin-top: 20px;
-                font-weight: 500;
+                font-weight: 700;
+                font-size: 1.1rem;
+                transition: all 0.2s;
+                box-shadow: 0 0 20px rgba(0,255,0,0.3);
             }}
-            .btn:hover {{ background: #611f69; }}
+            .btn:hover {{
+                transform: translateY(-2px);
+                box-shadow: 0 0 40px rgba(0,255,0,0.5);
+            }}
+
+            /* Demo Section */
+            .demo {{
+                padding: 60px 0;
+            }}
+            .demo h2 {{
+                text-align: center;
+                font-size: 2rem;
+                margin-bottom: 40px;
+                color: #fff;
+            }}
+            .demo-images {{
+                display: flex;
+                flex-direction: column;
+                gap: 40px;
+                align-items: center;
+            }}
+            .demo-img-wrapper {{
+                position: relative;
+                max-width: 900px;
+                width: 100%;
+            }}
+            .demo-img-wrapper img {{
+                width: 100%;
+                border-radius: 12px;
+                border: 1px solid #222;
+                box-shadow: 0 0 40px rgba(0,255,0,0.1);
+            }}
+            .demo-img-caption {{
+                text-align: center;
+                color: #888;
+                font-size: 0.95rem;
+                margin-top: 16px;
+            }}
+
+            /* How it works */
+            .how {{
+                padding: 60px 0;
+                background: #0d0d0d;
+            }}
+            .how h2 {{
+                text-align: center;
+                font-size: 2rem;
+                margin-bottom: 48px;
+                color: #fff;
+            }}
+            .steps {{
+                display: grid;
+                grid-template-columns: repeat(3, 1fr);
+                gap: 32px;
+            }}
+            .step {{
+                text-align: center;
+                padding: 24px;
+            }}
+            .step-num {{
+                width: 48px;
+                height: 48px;
+                background: linear-gradient(135deg, #00ff00, #00aa00);
+                color: #0a0a0a;
+                border-radius: 50%;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-weight: 700;
+                font-size: 1.2rem;
+                margin: 0 auto 16px;
+            }}
+            .step h3 {{
+                color: #fff;
+                margin-bottom: 8px;
+            }}
+            .step p {{
+                color: #666;
+                font-size: 0.95rem;
+            }}
+            .step code {{
+                background: #1a1a1a;
+                padding: 2px 8px;
+                border-radius: 4px;
+                font-size: 0.85rem;
+                color: #00ff00;
+            }}
+
+            /* Pricing */
+            .pricing {{
+                padding: 60px 0;
+            }}
+            .pricing h2 {{
+                text-align: center;
+                font-size: 2rem;
+                margin-bottom: 48px;
+                color: #fff;
+            }}
+            .plans {{
+                display: grid;
+                grid-template-columns: repeat(2, 1fr);
+                gap: 24px;
+                max-width: 700px;
+                margin: 0 auto;
+            }}
+            .plan {{
+                background: #111;
+                border: 1px solid #222;
+                border-radius: 16px;
+                padding: 32px;
+            }}
+            .plan.pro {{
+                border-color: #00ff00;
+                box-shadow: 0 0 30px rgba(0,255,0,0.1);
+                position: relative;
+            }}
+            .plan.pro::before {{
+                content: 'RECOMMENDED';
+                position: absolute;
+                top: -12px;
+                left: 50%;
+                transform: translateX(-50%);
+                background: #00ff00;
+                color: #0a0a0a;
+                padding: 4px 16px;
+                border-radius: 20px;
+                font-size: 0.75rem;
+                font-weight: 700;
+            }}
+            .plan h3 {{
+                color: #fff;
+                font-size: 1.5rem;
+                margin-bottom: 8px;
+            }}
+            .plan .price {{
+                font-size: 2.5rem;
+                font-weight: 700;
+                color: #00ff00;
+                margin: 16px 0;
+            }}
+            .plan .price span {{
+                font-size: 1rem;
+                color: #666;
+                font-weight: normal;
+            }}
+            .plan ul {{
+                list-style: none;
+                margin: 24px 0;
+                text-align: left;
+            }}
+            .plan li {{
+                padding: 8px 0;
+                color: #888;
+            }}
+            .plan li::before {{
+                content: '✓';
+                color: #00ff00;
+                font-weight: bold;
+                margin-right: 8px;
+            }}
+            .plan .btn {{
+                width: 100%;
+                text-align: center;
+            }}
+            .btn-free {{
+                background: #222;
+                color: #888;
+                box-shadow: none;
+            }}
+            .btn-free:hover {{
+                background: #333;
+            }}
+
+            /* Footer */
+            footer {{
+                padding: 40px 0;
+                text-align: center;
+                color: #444;
+                border-top: 1px solid #1a1a1a;
+            }}
+
+            /* Responsive */
+            @media (max-width: 768px) {{
+                .steps {{
+                    grid-template-columns: 1fr;
+                }}
+                .plans {{
+                    grid-template-columns: 1fr;
+                }}
+                .logo {{
+                    font-size: 2.5rem;
+                }}
+            }}
         </style>
     </head>
     <body>
-        <h1>VibeCheck</h1>
-        <p>Slack에서 서버를 원격으로 제어하세요.<br>
-        Claude Code를 Slack DM으로 사용할 수 있습니다.</p>
-        <a href="{install_url}" class="btn">Add to Slack</a>
+        <div class="container">
+            <section class="hero">
+                <!-- Logo SVG -->
+                <svg class="logo-img" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+                    <defs>
+                        <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+                            <feGaussianBlur stdDeviation="6" result="coloredBlur"/>
+                            <feMerge>
+                                <feMergeNode in="coloredBlur"/>
+                                <feMergeNode in="SourceGraphic"/>
+                            </feMerge>
+                        </filter>
+                        <filter id="strongGlow" x="-100%" y="-100%" width="300%" height="300%">
+                            <feGaussianBlur stdDeviation="12" result="coloredBlur"/>
+                            <feMerge>
+                                <feMergeNode in="coloredBlur"/>
+                                <feMergeNode in="coloredBlur"/>
+                                <feMergeNode in="SourceGraphic"/>
+                            </feMerge>
+                        </filter>
+                    </defs>
+                    <rect x="0" y="0" width="512" height="512" rx="80" ry="80" fill="#0a0a0a"/>
+                    <g stroke="#1a1a1a" stroke-width="1">
+                        <line x1="0" y1="128" x2="512" y2="128"/>
+                        <line x1="0" y1="256" x2="512" y2="256"/>
+                        <line x1="0" y1="384" x2="512" y2="384"/>
+                        <line x1="128" y1="0" x2="128" y2="512"/>
+                        <line x1="256" y1="0" x2="256" y2="512"/>
+                        <line x1="384" y1="0" x2="384" y2="512"/>
+                    </g>
+                    <path d="M 40 280 L 120 280 L 160 280 L 200 320 L 256 140 L 310 320 L 350 280 L 400 280 L 472 280"
+                        fill="none" stroke="#00ff00" stroke-width="8" stroke-linecap="round" stroke-linejoin="round" filter="url(#strongGlow)"/>
+                    <path d="M 40 280 L 120 280 L 160 280 L 200 320 L 256 140 L 310 320 L 350 280 L 400 280 L 472 280"
+                        fill="none" stroke="#00ff00" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" opacity="0.5"/>
+                    <path d="M 380 400 L 405 430 L 460 360"
+                        fill="none" stroke="#00ff00" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" filter="url(#glow)"/>
+                    <circle cx="60" cy="60" r="6" fill="#00ff00" opacity="0.6" filter="url(#glow)"/>
+                    <circle cx="452" cy="60" r="6" fill="#00ff00" opacity="0.6" filter="url(#glow)"/>
+                </svg>
+                <div class="logo">VibeCheck</div>
+                <p class="tagline">Slack에서 <strong>Claude Code</strong>를 원격 제어</p>
+                <p class="description">
+                    서버에서 실행 중인 Claude Code CLI를 Slack DM으로 제어하세요.
+                    집, 카페, 이동 중 어디서든 코드를 작성하고 수정할 수 있습니다.
+                </p>
+                <a href="{install_url}" class="btn">Slack에 추가하기</a>
+            </section>
+        </div>
+
+        <section class="demo">
+            <div class="container">
+                <h2>이렇게 동작해요</h2>
+                <div class="demo-images">
+                    <div class="demo-img-wrapper">
+                        <img src="https://raw.githubusercontent.com/NestozAI/VibeCheck/main/assets/ux_demo.png" alt="VibeCheck UX Demo">
+                        <p class="demo-img-caption">Slack에서 UI 렌더링, 디자인 수정을 요청하고 즉각적인 시각적 피드백을 받으세요</p>
+                    </div>
+                    <div class="demo-img-wrapper">
+                        <img src="https://raw.githubusercontent.com/NestozAI/VibeCheck/main/assets/architecture.png" alt="VibeCheck Architecture">
+                        <p class="demo-img-caption">시스템 아키텍처: Slack - Cloud Server - Local Agent</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="how">
+            <div class="container">
+                <h2>3단계로 시작하세요</h2>
+                <div class="steps">
+                    <div class="step">
+                        <div class="step-num">1</div>
+                        <h3>Slack 앱 설치</h3>
+                        <p>"Add to Slack" 버튼을 클릭해 워크스페이스에 VibeCheck을 설치하세요.</p>
+                    </div>
+                    <div class="step">
+                        <div class="step-num">2</div>
+                        <h3>Agent 실행</h3>
+                        <p>서버에서 <code>pip install vibecheck-agent</code> 후 Agent를 실행하세요.</p>
+                    </div>
+                    <div class="step">
+                        <div class="step-num">3</div>
+                        <h3>Slack DM 전송</h3>
+                        <p>VibeCheck 봇에게 DM을 보내면 서버의 Claude가 응답합니다.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section class="pricing">
+            <div class="container">
+                <h2>요금제</h2>
+                <div class="plans">
+                    <div class="plan">
+                        <h3>Free</h3>
+                        <div class="price">$0<span>/월</span></div>
+                        <ul>
+                            <li>월 10회 메시지</li>
+                            <li>1개 워크스페이스</li>
+                            <li>커뮤니티 지원</li>
+                        </ul>
+                        <a href="{install_url}" class="btn btn-free">무료로 시작</a>
+                    </div>
+                    <div class="plan pro">
+                        <h3>Pro</h3>
+                        <div class="price">$10<span>/월</span></div>
+                        <ul>
+                            <li>무제한 메시지</li>
+                            <li>무제한 워크스페이스</li>
+                            <li>우선 지원</li>
+                            <li>신규 기능 얼리 액세스</li>
+                        </ul>
+                        <a href="{install_url}" class="btn">Pro 시작하기</a>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <footer>
+            <div class="container">
+                <p>VibeCheck by Nestoz</p>
+            </div>
+        </footer>
     </body>
     </html>
     """)
