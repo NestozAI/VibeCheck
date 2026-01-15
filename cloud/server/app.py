@@ -358,6 +358,7 @@ app = FastAPI(title="VibeCheck Cloud", lifespan=lifespan)
 async def debug_db():
     """DB 상태 확인"""
     from models import DATABASE_URL, engine
+    from sqlalchemy import text
     import re
 
     # 비밀번호 마스킹
@@ -369,16 +370,16 @@ async def debug_db():
     try:
         # 테이블 목록 조회
         if DATABASE_URL.startswith("postgresql"):
-            result = db.execute("SELECT tablename FROM pg_tables WHERE schemaname = 'public'")
+            result = db.execute(text("SELECT tablename FROM pg_tables WHERE schemaname = 'public'"))
             tables = [row[0] for row in result]
         else:
-            result = db.execute("SELECT name FROM sqlite_master WHERE type='table'")
+            result = db.execute(text("SELECT name FROM sqlite_master WHERE type='table'"))
             tables = [row[0] for row in result]
 
         # 각 테이블의 row 수
         counts = {}
         for table in tables:
-            result = db.execute(f"SELECT COUNT(*) FROM {table}")
+            result = db.execute(text(f"SELECT COUNT(*) FROM {table}"))
             counts[table] = result.scalar()
 
         return {
