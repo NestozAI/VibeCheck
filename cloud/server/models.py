@@ -102,6 +102,18 @@ class Session(Base):
     expires_at = Column(DateTime)
 
 
+class TrustedPath(Base):
+    """신뢰 경로 테이블 (보안 승인된 경로)"""
+    __tablename__ = "trusted_paths"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, index=True)  # User.id 참조
+
+    path = Column(String)  # 신뢰 경로
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
 # 데이터베이스 설정
 # Railway PostgreSQL 사용 시 DATABASE_URL 환경변수 자동 제공
 DATABASE_URL = os.environ.get("DATABASE_URL", "sqlite:///./vibecheck.db")

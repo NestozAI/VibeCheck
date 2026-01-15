@@ -4,6 +4,8 @@ VibeCheck Agent
 - 중앙 서버에 WebSocket 연결
 - 로컬에서 CLI 실행
 - 결과를 서버로 전송
+- 이미지 감지 및 업로드
+- 경로 기반 보안 시스템
 """
 
 import os
@@ -13,10 +15,14 @@ import argparse
 import subprocess
 import logging
 import json
-from typing import Optional
+import re
+import glob
+import base64
+from typing import Optional, Set, List, Dict
 from concurrent.futures import ThreadPoolExecutor
 
 import websockets
+from websockets.exceptions import ConnectionClosed
 
 # 로깅 설정
 logging.basicConfig(
@@ -35,6 +41,97 @@ DEFAULT_SERVER = "wss://vibecheck.nestoz.co/ws/agent"
 # CLI 실행을 위한 스레드풀
 executor = ThreadPoolExecutor(max_workers=1)
 
+# 이미지 확장자
+IMAGE_EXTENSIONS = {'.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp'}
+
+# 안전한 시스템 명령어 (승인 없이 실행 가능)
+SAFE_SYSTEM_COMMANDS = {
+    'nvidia-smi', 'df', 'free', 'uptime', 'whoami', 'hostname',
+    'cat /proc/cpuinfo', 'cat /proc/meminfo', 'ps', 'top -bn1',
+    'ls', 'pwd', 'date', 'which', 'echo', 'git status', 'git log', 'git diff'
+}
+
+
+# =============================================================================
+# 이미지 감지 유틸리티
+# =============================================================================
+
+def get_images_with_mtime(work_dir: str) -> Dict[str, float]:
+    """작업 디렉토리의 이미지 파일과 수정 시간 반환"""
+    images = {}
+    for ext in IMAGE_EXTENSIONS:
+        for path in glob.glob(os.path.join(work_dir, f'*{ext}')):
+            images[path] = os.path.getmtime(path)
+        for path in glob.glob(os.path.join(work_dir, f'**/*{ext}'), recursive=True):
+            images[path] = os.path.getmtime(path)
+    return images
+
+
+def find_new_or_modified_images(work_dir: str, before_images: Dict[str, float]) -> List[str]:
+    """새로 생성되거나 수정된 이미지 파일 찾기"""
+    after_images = get_images_with_mtime(work_dir)
+    result = []
+    for path, mtime in after_images.items():
+        if path not in before_images or mtime > before_images[path]:
+            result.append(path)
+    return result
+
+
+def image_to_base64(image_path: str) -> Optional[str]:
+    """이미지 파일을 base64로 인코딩"""
+    try:
+        with open(image_path, 'rb') as f:
+            return base64.b64encode(f.read()).decode('utf-8')
+    except Exception as e:
+        logger.error(f"이미지 인코딩 실패: {e}")
+        return None
+
+
+# =============================================================================
+# 경로 보안 유틸리티
+# =============================================================================
+
+def normalize_path(path: str) -> str:
+    """경로 정규화"""
+    return os.path.normpath(os.path.abspath(os.path.expanduser(path)))
+
+
+def extract_paths_from_message(message: str) -> List[str]:
+    """메시지에서 경로 추출"""
+    paths = []
+
+    # 절대 경로 패턴 (/로 시작)
+    abs_pattern = r'(/[a-zA-Z0-9_\-./]+)'
+    abs_matches = re.findall(abs_pattern, message)
+    paths.extend(abs_matches)
+
+    # 상대 경로 패턴 (./나 ../ 로 시작)
+    rel_pattern = r'(\.\./[a-zA-Z0-9_\-./]+|\.\/[a-zA-Z0-9_\-./]+)'
+    rel_matches = re.findall(rel_pattern, message)
+    paths.extend(rel_matches)
+
+    # 중복 제거
+    unique_paths = []
+    seen = set()
+    for p in paths:
+        if p.startswith('.') and '/' not in p:
+            continue
+        normalized = normalize_path(p) if p.startswith('/') else p
+        if normalized not in seen:
+            seen.add(normalized)
+            unique_paths.append(p)
+
+    return unique_paths
+
+
+def is_safe_system_command(message: str) -> bool:
+    """안전한 시스템 명령어인지 확인"""
+    msg_lower = message.lower().strip()
+    for cmd in SAFE_SYSTEM_COMMANDS:
+        if cmd in msg_lower:
+            return True
+    return False
+
 
 class VibeAgent:
     """VibeCheck Agent"""
@@ -46,6 +143,36 @@ class VibeAgent:
         self.session_started = False
         self.ws: Optional[websockets.WebSocketClientProtocol] = None
         self.processing = False  # CLI 실행 중 플래그
+
+        # 신뢰 경로 (작업 디렉토리는 기본 신뢰)
+        self.trusted_paths: Set[str] = {normalize_path(work_dir)}
+
+        # 승인 대기 중인 요청
+        self.pending_approval: Optional[dict] = None
+
+    def is_path_trusted(self, path: str) -> bool:
+        """경로가 신뢰할 수 있는지 확인"""
+        normalized = normalize_path(path)
+        for trusted in self.trusted_paths:
+            if normalized == trusted or normalized.startswith(trusted + os.sep):
+                return True
+        return False
+
+    def check_untrusted_paths(self, message: str) -> List[str]:
+        """메시지에서 신뢰되지 않은 경로 찾기"""
+        paths = extract_paths_from_message(message)
+        untrusted = []
+        for path in paths:
+            if path.startswith('/'):
+                if not self.is_path_trusted(path):
+                    untrusted.append(path)
+        return untrusted
+
+    def add_trusted_path(self, path: str):
+        """신뢰 경로 추가"""
+        normalized = normalize_path(path)
+        self.trusted_paths.add(normalized)
+        logger.info(f"신뢰 경로 추가: {normalized}")
 
     def run_command_sync(self, message: str) -> str:
         """로컬에서 CLI 명령 실행 (동기, 스레드에서 실행됨)"""
@@ -96,14 +223,32 @@ class VibeAgent:
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(executor, self.run_command_sync, message)
 
+    def is_ws_open(self) -> bool:
+        """WebSocket 연결 상태 확인 (websockets 12.0+ 호환)"""
+        if not self.ws:
+            return False
+        try:
+            # websockets 12.0+에서는 state 속성 사용
+            from websockets.protocol import State
+            return self.ws.state == State.OPEN
+        except (AttributeError, ImportError):
+            # 이전 버전 호환
+            try:
+                return not self.ws.closed
+            except AttributeError:
+                return True  # 확인 불가시 열려있다고 가정
+
     async def ping_loop(self):
         """주기적으로 ping 전송 (연결 유지)"""
         while True:
             try:
                 await asyncio.sleep(15)  # 15초마다 ping
-                if self.ws and not self.ws.closed:
+                if self.is_ws_open():
                     await self.ws.send(json.dumps({"type": "ping"}))
                     logger.debug("ping 전송")
+            except ConnectionClosed:
+                logger.debug("ping 중 연결 종료")
+                break
             except Exception as e:
                 logger.debug(f"ping 오류: {e}")
                 break
@@ -158,22 +303,56 @@ class VibeAgent:
             message = data.get("message", "")
             logger.info(f"쿼리 수신: {message[:50]}...")
 
-            self.processing = True
+            # 🛡️ 보안 검사: 신뢰되지 않은 경로 확인
+            untrusted_paths = self.check_untrusted_paths(message)
 
-            # CLI 실행 (비동기 - ping 루프가 계속 동작)
-            result = await self.run_command(message)
+            if untrusted_paths and not is_safe_system_command(message):
+                # 승인 필요 - 서버에 승인 요청 전송
+                logger.info(f"승인 필요: {untrusted_paths}")
+                self.pending_approval = {"message": message, "paths": untrusted_paths}
 
-            self.processing = False
+                if self.is_ws_open():
+                    await self.ws.send(json.dumps({
+                        "type": "approval_required",
+                        "paths": untrusted_paths,
+                        "message": message[:200]  # 미리보기
+                    }))
+                return
 
-            # 결과 전송
-            if self.ws and not self.ws.closed:
-                await self.ws.send(json.dumps({
-                    "type": "response",
-                    "result": result
-                }))
-                logger.info("응답 전송 완료")
-            else:
-                logger.error("WebSocket이 닫혀서 응답 전송 실패")
+            # CLI 실행
+            await self.execute_and_respond(message)
+
+        elif msg_type == "approval":
+            # 서버에서 승인/거절 응답
+            approved = data.get("approved", False)
+            permanent = data.get("permanent", False)
+
+            if self.pending_approval:
+                if approved:
+                    logger.info("승인됨! 명령 실행 중...")
+
+                    # 영구 승인이면 경로 추가
+                    if permanent:
+                        for path in self.pending_approval.get("paths", []):
+                            self.add_trusted_path(path)
+
+                    # 실행
+                    await self.execute_and_respond(self.pending_approval["message"])
+                else:
+                    logger.info("거절됨")
+                    if self.is_ws_open():
+                        await self.ws.send(json.dumps({
+                            "type": "response",
+                            "result": "❌ 요청이 거절되었습니다."
+                        }))
+
+                self.pending_approval = None
+
+        elif msg_type == "add_trusted_path":
+            # 서버에서 신뢰 경로 추가 요청
+            path = data.get("path")
+            if path:
+                self.add_trusted_path(path)
 
         elif msg_type == "ping":
             await self.ws.send(json.dumps({"type": "pong"}))
@@ -183,6 +362,51 @@ class VibeAgent:
 
         elif msg_type == "error":
             logger.error(f"서버 오류: {data.get('message')}")
+
+    async def execute_and_respond(self, message: str):
+        """CLI 실행 및 응답 (이미지 감지 포함)"""
+        self.processing = True
+
+        # 실행 전 이미지 목록 저장
+        before_images = get_images_with_mtime(self.work_dir)
+
+        # CLI 실행 (비동기 - ping 루프가 계속 동작)
+        result = await self.run_command(message)
+
+        self.processing = False
+
+        # 새로 생성된 이미지 감지
+        new_images = find_new_or_modified_images(self.work_dir, before_images)
+        images_data = []
+
+        for img_path in new_images[:5]:  # 최대 5개
+            b64 = image_to_base64(img_path)
+            if b64:
+                images_data.append({
+                    "filename": os.path.basename(img_path),
+                    "data": b64
+                })
+                logger.info(f"이미지 감지: {os.path.basename(img_path)}")
+
+        # 결과 전송
+        if self.is_ws_open():
+            try:
+                response_data = {
+                    "type": "response",
+                    "result": result
+                }
+
+                # 이미지가 있으면 함께 전송
+                if images_data:
+                    response_data["images"] = images_data
+                    logger.info(f"{len(images_data)}개 이미지 전송")
+
+                await self.ws.send(json.dumps(response_data))
+                logger.info("응답 전송 완료")
+            except ConnectionClosed:
+                logger.error("응답 전송 중 연결 종료됨")
+        else:
+            logger.error("WebSocket이 닫혀서 응답 전송 실패")
 
 
 async def main():

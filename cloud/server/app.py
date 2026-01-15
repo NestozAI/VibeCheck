@@ -8,9 +8,11 @@ VibeCheck Cloud Server
 """
 
 import os
+import io
 import json
 import logging
 import asyncio
+import base64
 from typing import Dict, List
 from contextlib import asynccontextmanager
 from urllib.parse import parse_qs
@@ -25,7 +27,7 @@ from slack_sdk.oauth import AuthorizeUrlGenerator
 from slack_sdk.oauth.installation_store import Installation
 import httpx
 
-from models import init_db, User, Workspace, Session, Message, SessionLocal
+from models import init_db, User, Workspace, Session, Message, TrustedPath, SessionLocal
 
 # 환경변수 로드
 load_dotenv()
@@ -67,6 +69,9 @@ pending_responses: Dict[str, tuple] = {}
 
 # API Key -> pending action data (file changes waiting for approval)
 pending_actions: Dict[str, dict] = {}
+
+# 보안 승인 대기 (approval_id -> {api_key, paths, channel, ...})
+pending_security_approvals: Dict[str, dict] = {}
 
 # 기본 Allowlist (Claude Code 권한)
 DEFAULT_ALLOWLIST = [
@@ -152,6 +157,59 @@ def build_status_blocks(status: str, message: str) -> List[dict]:
                 "type": "mrkdwn",
                 "text": f"{emoji} {message}"
             }
+        }
+    ]
+
+
+def build_security_approval_blocks(paths: List[str], message_preview: str, approval_id: str) -> List[dict]:
+    """보안 승인 요청 Block Kit"""
+    paths_text = "\n".join([f"• `{p}`" for p in paths])
+
+    return [
+        {
+            "type": "header",
+            "text": {"type": "plain_text", "text": "🛡️ 보안 승인 필요", "emoji": True}
+        },
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": f"다음 경로에 접근하려고 합니다:\n{paths_text}"
+            }
+        },
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": f"*요청:* {message_preview}..."
+            }
+        },
+        {"type": "divider"},
+        {
+            "type": "actions",
+            "block_id": f"security_approval_{approval_id}",
+            "elements": [
+                {
+                    "type": "button",
+                    "text": {"type": "plain_text", "text": "✅ 승인 (1회)", "emoji": True},
+                    "style": "primary",
+                    "action_id": "approve_once",
+                    "value": approval_id
+                },
+                {
+                    "type": "button",
+                    "text": {"type": "plain_text", "text": "✅ 승인 (영구)", "emoji": True},
+                    "action_id": "approve_permanent",
+                    "value": approval_id
+                },
+                {
+                    "type": "button",
+                    "text": {"type": "plain_text", "text": "❌ 거절", "emoji": True},
+                    "style": "danger",
+                    "action_id": "deny_access",
+                    "value": approval_id
+                }
+            ]
         }
     ]
 
@@ -1430,6 +1488,74 @@ async def handle_block_actions(payload: dict):
                     blocks=build_status_blocks("warning", "변경사항이 취소되었습니다.")
                 )
 
+            # 🛡️ 보안 승인 (1회)
+            elif action_id == "approve_once":
+                approval = pending_security_approvals.pop(value, None)
+                if approval:
+                    ws = connected_agents.get(approval["api_key"])
+                    if ws:
+                        await ws.send_json({
+                            "type": "approval",
+                            "approved": True,
+                            "permanent": False
+                        })
+
+                    # 버튼 메시지 업데이트
+                    await client.chat_update(
+                        channel=channel_id,
+                        ts=body["message"]["ts"],
+                        text="✅ 승인됨 (1회)",
+                        blocks=build_status_blocks("success", "승인됨 (1회) - 실행 중...")
+                    )
+                    logger.info(f"보안 승인 (1회): {value}")
+
+            # 🛡️ 보안 승인 (영구)
+            elif action_id == "approve_permanent":
+                approval = pending_security_approvals.pop(value, None)
+                if approval:
+                    # DB에 신뢰 경로 저장
+                    for path in approval.get("paths", []):
+                        trusted = TrustedPath(user_id=user.id, path=path)
+                        db.add(trusted)
+                    db.commit()
+
+                    ws = connected_agents.get(approval["api_key"])
+                    if ws:
+                        await ws.send_json({
+                            "type": "approval",
+                            "approved": True,
+                            "permanent": True
+                        })
+
+                    # 버튼 메시지 업데이트
+                    await client.chat_update(
+                        channel=channel_id,
+                        ts=body["message"]["ts"],
+                        text="✅ 승인됨 (영구)",
+                        blocks=build_status_blocks("success", "승인됨 (영구) - 경로가 신뢰 목록에 추가됨")
+                    )
+                    logger.info(f"보안 승인 (영구): {value}")
+
+            # 🛡️ 보안 거절
+            elif action_id == "deny_access":
+                approval = pending_security_approvals.pop(value, None)
+                if approval:
+                    ws = connected_agents.get(approval["api_key"])
+                    if ws:
+                        await ws.send_json({
+                            "type": "approval",
+                            "approved": False
+                        })
+
+                    # 버튼 메시지 업데이트
+                    await client.chat_update(
+                        channel=channel_id,
+                        ts=body["message"]["ts"],
+                        text="❌ 거절됨",
+                        blocks=build_status_blocks("error", "접근이 거절되었습니다.")
+                    )
+                    logger.info(f"보안 거절: {value}")
+
     finally:
         db.close()
 
@@ -1678,9 +1804,10 @@ async def agent_websocket(websocket: WebSocket, key: str):
                 if data.get("type") == "response":
                     # Agent 응답 -> Slack으로 전달
                     response_text = data.get("result", "")
+                    images = data.get("images", [])  # base64 인코딩된 이미지들
                     pending = pending_responses.pop(key, None)  # pop으로 가져오면서 삭제
 
-                    logger.info(f"Agent 응답 수신: key={key[:20]}..., pending={pending is not None}, text_len={len(response_text)}")
+                    logger.info(f"Agent 응답 수신: key={key[:20]}..., pending={pending is not None}, text_len={len(response_text)}, images={len(images)}")
 
                     if pending and response_text:
                         team_id, channel, message_ts = pending
@@ -1698,6 +1825,24 @@ async def agent_websocket(websocket: WebSocket, key: str):
                                     blocks=response_blocks
                                 )
                                 logger.info(f"Slack으로 응답 전송 성공: {response_text[:50]}...")
+
+                                # 이미지 업로드
+                                for img in images:
+                                    try:
+                                        filename = img.get("filename", "image.png")
+                                        img_data = base64.b64decode(img.get("data", ""))
+
+                                        await client.files_upload_v2(
+                                            channel=channel,
+                                            file=io.BytesIO(img_data),
+                                            filename=filename,
+                                            title=filename,
+                                            initial_comment=f"📊 생성된 이미지: `{filename}`"
+                                        )
+                                        logger.info(f"이미지 업로드 완료: {filename}")
+                                    except Exception as img_err:
+                                        logger.error(f"이미지 업로드 실패: {img_err}")
+
                             except Exception as slack_err:
                                 logger.error(f"Slack 메시지 업데이트 실패: {slack_err}")
                                 # 업데이트 실패 시 새 메시지로 전송 시도
@@ -1714,6 +1859,44 @@ async def agent_websocket(websocket: WebSocket, key: str):
                         logger.warning(f"pending_responses에 키가 없음: {key[:20]}...")
                     elif not response_text:
                         logger.warning("응답 텍스트가 비어있음")
+
+                elif data.get("type") == "approval_required":
+                    # Agent가 보안 승인 요청
+                    paths = data.get("paths", [])
+                    message_preview = data.get("message", "")[:100]
+                    pending = pending_responses.get(key)
+
+                    logger.info(f"보안 승인 요청 수신: paths={paths}, pending={pending is not None}")
+
+                    if pending:
+                        team_id, channel, message_ts = pending
+                        client = get_slack_client(team_id)
+                        logger.info(f"보안 승인: team={team_id}, channel={channel}, client={client is not None}")
+
+                        if client:
+                            # 승인 ID 생성
+                            approval_id = secrets.token_hex(8)
+                            pending_security_approvals[approval_id] = {
+                                "api_key": key,
+                                "paths": paths,
+                                "team_id": team_id,
+                                "channel": channel,
+                                "message_ts": message_ts
+                            }
+
+                            # 승인 요청 메시지 전송
+                            approval_blocks = build_security_approval_blocks(paths, message_preview, approval_id)
+                            await client.chat_update(
+                                channel=channel,
+                                ts=message_ts,
+                                text="🛡️ 보안 승인 필요",
+                                blocks=approval_blocks
+                            )
+                            logger.info(f"보안 승인 요청 전송: {approval_id}")
+                        else:
+                            logger.warning("보안 승인: Slack 클라이언트 없음")
+                    else:
+                        logger.warning(f"보안 승인: pending_responses에 키 없음: {key[:20]}...")
 
                 elif data.get("type") == "ping":
                     await websocket.send_json({"type": "pong"})
