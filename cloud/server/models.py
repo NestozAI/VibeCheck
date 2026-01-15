@@ -122,18 +122,30 @@ DATABASE_URL = os.environ.get("DATABASE_URL", "sqlite:///./vibecheck.db")
 if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
+# DB URL 로깅 (비밀번호 마스킹)
+_masked_url = DATABASE_URL
+if "@" in _masked_url:
+    # postgresql://user:password@host:port/db -> postgresql://user:****@host:port/db
+    import re
+    _masked_url = re.sub(r'://([^:]+):([^@]+)@', r'://\1:****@', _masked_url)
+print(f"[DB] DATABASE_URL: {_masked_url}")
+
 # SQLite는 check_same_thread 필요, PostgreSQL은 불필요
 if DATABASE_URL.startswith("sqlite"):
     engine = create_engine(DATABASE_URL, connect_args={"check_same_thread": False})
+    print("[DB] Using SQLite")
 else:
     engine = create_engine(DATABASE_URL)
+    print("[DB] Using PostgreSQL")
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
 def init_db():
     """데이터베이스 초기화"""
+    print("[DB] Creating tables...")
     Base.metadata.create_all(bind=engine)
+    print(f"[DB] Tables created: {list(Base.metadata.tables.keys())}")
 
 
 def get_db():
