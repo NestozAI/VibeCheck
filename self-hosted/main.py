@@ -6,6 +6,8 @@ Claude Code Bridge Bot
 - 🛡️ 경로 기반 보안 승인 시스템
 """
 
+import os
+import re
 import time
 import logging
 import uuid
@@ -26,6 +28,7 @@ from image_handler import (
     extract_image_paths_from_response, find_contextual_images,
     upload_images_to_slack
 )
+from html_screenshot import html_file_to_screenshot
 from ui_builder import (
     build_approval_blocks, build_message_with_delete_button,
     build_trusted_paths_blocks
@@ -171,8 +174,40 @@ def process_and_reply(say, thread_ts: str, user_message: str, client=None, chann
     if client and channel:
         uploaded_images = set()
 
+        # 0. 스크린샷 요청 감지 - HTML 파일 스크린샷 생성
+        screenshot_keywords = ['스크린샷', 'screenshot', '캡처', 'capture', '보여줘', 'show me', 'preview', '미리보기']
+        wants_screenshot = any(kw in user_message.lower() for kw in screenshot_keywords)
+
+        if wants_screenshot:
+            # 응답에서 HTML 파일 경로 찾기
+            html_pattern = r'([a-zA-Z0-9_\-./]+\.html)'
+            html_matches = re.findall(html_pattern, response)
+
+            for html_file in html_matches:
+                # 절대 경로 또는 상대 경로 처리
+                if html_file.startswith('/'):
+                    html_path = html_file
+                else:
+                    html_path = os.path.join(WORK_DIR, html_file)
+
+                if os.path.isfile(html_path):
+                    try:
+                        screenshot_path = os.path.join(WORK_DIR, 'screenshot.png')
+                        logger.info(f"HTML 스크린샷 생성 중: {html_path}")
+                        html_file_to_screenshot(html_path, screenshot_path, width=1200, height=800, full_page=True)
+                        logger.info(f"스크린샷 생성 완료: {screenshot_path}")
+
+                        # 스크린샷 업로드
+                        upload_images_to_slack(client, channel, thread_ts, [screenshot_path],
+                            "Screenshot" if lang == "en" else "스크린샷", delete_after_upload=True)
+                        uploaded_images.add(screenshot_path)
+                        break  # 첫 번째 HTML 파일만 처리
+                    except Exception as e:
+                        logger.error(f"스크린샷 생성 실패: {e}")
+
         # 1. 새로 생성되거나 수정된 이미지 업로드
         new_images = find_new_or_modified_images(WORK_DIR, before_images)
+        new_images = [img for img in new_images if img not in uploaded_images]
         if new_images:
             logger.info(f"새/수정된 이미지 발견: {new_images}")
             upload_images_to_slack(client, channel, thread_ts, new_images, get_msg("image_generated", lang))
@@ -259,8 +294,37 @@ def execute_pending_task(task_id: str, client, permanent: bool = False):
     # 이미지 업로드 처리
     uploaded_images = set()
 
+    # 0. 스크린샷 요청 감지 - HTML 파일 스크린샷 생성
+    screenshot_keywords = ['스크린샷', 'screenshot', '캡처', 'capture', '보여줘', 'show me', 'preview', '미리보기']
+    wants_screenshot = any(kw in user_message.lower() for kw in screenshot_keywords)
+
+    if wants_screenshot:
+        html_pattern = r'([a-zA-Z0-9_\-./]+\.html)'
+        html_matches = re.findall(html_pattern, response)
+
+        for html_file in html_matches:
+            if html_file.startswith('/'):
+                html_path = html_file
+            else:
+                html_path = os.path.join(WORK_DIR, html_file)
+
+            if os.path.isfile(html_path):
+                try:
+                    screenshot_path = os.path.join(WORK_DIR, 'screenshot.png')
+                    logger.info(f"HTML 스크린샷 생성 중: {html_path}")
+                    html_file_to_screenshot(html_path, screenshot_path, width=1200, height=800, full_page=True)
+                    logger.info(f"스크린샷 생성 완료: {screenshot_path}")
+
+                    upload_images_to_slack(client, channel, thread_ts, [screenshot_path],
+                        "Screenshot" if lang == "en" else "스크린샷", delete_after_upload=True)
+                    uploaded_images.add(screenshot_path)
+                    break
+                except Exception as e:
+                    logger.error(f"스크린샷 생성 실패: {e}")
+
     # 1. 새로 생성되거나 수정된 이미지 업로드
     new_images = find_new_or_modified_images(WORK_DIR, before_images)
+    new_images = [img for img in new_images if img not in uploaded_images]
     if new_images:
         logger.info(f"새/수정된 이미지 발견: {new_images}")
         upload_images_to_slack(client, channel, thread_ts, new_images, get_msg("image_generated", lang))

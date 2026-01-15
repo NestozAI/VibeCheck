@@ -51,6 +51,7 @@ BASE_URL = os.environ.get("BASE_URL", "http://localhost:8080")
 # OAuth scopes
 SCOPES = [
     "chat:write",
+    "files:write",
     "im:history",
     "im:read",
     "im:write",
@@ -363,6 +364,7 @@ async def root():
     <head>
         <title>VibeCheck - Slack에서 Claude Code 원격 제어</title>
         <meta name="viewport" content="width=device-width, initial-scale=1">
+        <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect x='0' y='0' width='512' height='512' rx='80' ry='80' fill='%230a0a0a'/%3E%3Cpath d='M 40 280 L 120 280 L 160 280 L 200 320 L 256 140 L 310 320 L 350 280 L 400 280 L 472 280' fill='none' stroke='%2300ff00' stroke-width='8' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpath d='M 380 400 L 405 430 L 460 360' fill='none' stroke='%2300ff00' stroke-width='6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
         <style>
             * {{ box-sizing: border-box; margin: 0; padding: 0; }}
             body {{
@@ -851,6 +853,7 @@ async def slack_oauth_callback(code: str = None, error: str = None):
     <html>
     <head>
         <title>설치 완료!</title>
+        <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect x='0' y='0' width='512' height='512' rx='80' ry='80' fill='%230a0a0a'/%3E%3Cpath d='M 40 280 L 120 280 L 160 280 L 200 320 L 256 140 L 310 320 L 350 280 L 400 280 L 472 280' fill='none' stroke='%2300ff00' stroke-width='8' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpath d='M 380 400 L 405 430 L 460 360' fill='none' stroke='%2300ff00' stroke-width='6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
         <style>
             body {{
                 font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
@@ -858,13 +861,30 @@ async def slack_oauth_callback(code: str = None, error: str = None):
                 margin: 100px auto;
                 padding: 20px;
                 text-align: center;
+                background: #0a0a0a;
+                color: #e0e0e0;
             }}
-            h1 {{ color: #2eb67d; }}
-            p {{ color: #666; }}
+            h1 {{ color: #00ff00; }}
+            p {{ color: #888; margin-bottom: 12px; }}
             code {{
-                background: #f4f4f4;
+                background: #1a1a1a;
                 padding: 2px 8px;
                 border-radius: 4px;
+                color: #00ff00;
+            }}
+            .btn {{
+                display: inline-block;
+                background: #00ff00;
+                color: #0a0a0a;
+                padding: 12px 32px;
+                border-radius: 8px;
+                text-decoration: none;
+                font-weight: 600;
+                margin-top: 24px;
+                transition: opacity 0.2s;
+            }}
+            .btn:hover {{
+                opacity: 0.9;
             }}
         </style>
     </head>
@@ -872,6 +892,7 @@ async def slack_oauth_callback(code: str = None, error: str = None):
         <h1>설치 완료!</h1>
         <p><strong>{team_name}</strong> 워크스페이스에 VibeCheck이 설치되었습니다.</p>
         <p>Slack에서 VibeCheck 봇에게 DM을 보내면 API Key가 발급됩니다.</p>
+        <a href="/" class="btn">홈으로 가기</a>
     </body>
     </html>
     """)
@@ -1055,6 +1076,7 @@ def dashboard_html(user: User) -> str:
     <head>
         <title>Dashboard - VibeCheck</title>
         <meta name="viewport" content="width=device-width, initial-scale=1">
+        <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect x='0' y='0' width='512' height='512' rx='80' ry='80' fill='%230a0a0a'/%3E%3Cpath d='M 40 280 L 120 280 L 160 280 L 200 320 L 256 140 L 310 320 L 350 280 L 400 280 L 472 280' fill='none' stroke='%2300ff00' stroke-width='8' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpath d='M 380 400 L 405 430 L 460 360' fill='none' stroke='%2300ff00' stroke-width='6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
         <style>
             * {{ box-sizing: border-box; margin: 0; padding: 0; }}
             body {{
@@ -1831,17 +1853,18 @@ async def agent_websocket(websocket: WebSocket, key: str):
                                     try:
                                         filename = img.get("filename", "image.png")
                                         img_data = base64.b64decode(img.get("data", ""))
+                                        logger.info(f"이미지 업로드 시도: filename={filename}, size={len(img_data)} bytes")
 
-                                        await client.files_upload_v2(
+                                        # files_upload_v2는 BytesIO를 지원하지 않음, content에 bytes 전달
+                                        result = await client.files_upload_v2(
                                             channel=channel,
-                                            file=io.BytesIO(img_data),
+                                            content=img_data,
                                             filename=filename,
                                             title=filename,
-                                            initial_comment=f"📊 생성된 이미지: `{filename}`"
                                         )
-                                        logger.info(f"이미지 업로드 완료: {filename}")
+                                        logger.info(f"이미지 업로드 완료: {filename}, result={result.get('ok')}")
                                     except Exception as img_err:
-                                        logger.error(f"이미지 업로드 실패: {img_err}")
+                                        logger.error(f"이미지 업로드 실패: {img_err}", exc_info=True)
 
                             except Exception as slack_err:
                                 logger.error(f"Slack 메시지 업데이트 실패: {slack_err}")

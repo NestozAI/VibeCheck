@@ -24,6 +24,16 @@ from concurrent.futures import ThreadPoolExecutor
 import websockets
 from websockets.exceptions import ConnectionClosed
 
+try:
+    from html_screenshot import html_file_to_screenshot, screenshot_project, detect_project_type
+    HAS_SCREENSHOT = True
+except ImportError as e:
+    HAS_SCREENSHOT = False
+    print(f"⚠️ 스크린샷 기능 비활성화: {e}")
+except Exception as e:
+    HAS_SCREENSHOT = False
+    print(f"⚠️ 스크린샷 기능 비활성화 (기타 오류): {e}")
+
 # 로깅 설정
 logging.basicConfig(
     level=logging.INFO,
@@ -150,6 +160,9 @@ class VibeAgent:
         # 승인 대기 중인 요청
         self.pending_approval: Optional[dict] = None
 
+        # 최근 작업한 프로젝트 경로 저장 (스크린샷 등에 사용)
+        self.last_project_path: Optional[str] = None
+
     def is_path_trusted(self, path: str) -> bool:
         """경로가 신뢰할 수 있는지 확인"""
         normalized = normalize_path(path)
@@ -204,10 +217,13 @@ class VibeAgent:
 
             output = result.stdout
             if result.stderr:
-                logger.warning(f"stderr: {result.stderr[:100]}")
+                logger.warning(f"stderr: {result.stderr[:200]}")
 
             if result.returncode != 0:
-                return f"오류: {result.stderr or '알 수 없는 오류'}"
+                logger.error(f"CLI 실패: returncode={result.returncode}, stderr={result.stderr[:200] if result.stderr else 'None'}, stdout={result.stdout[:200] if result.stdout else 'None'}")
+                # stderr가 없으면 stdout에 에러 메시지가 있을 수 있음
+                error_msg = result.stderr or result.stdout or '알 수 없는 오류'
+                return f"오류: {error_msg}"
 
             logger.info(f"응답 ({len(output)}자): {output[:100]}...")
             return output
@@ -273,6 +289,7 @@ class VibeAgent:
                 print("\n" + "=" * 50)
                 print("  VibeCheck Agent 실행 중")
                 print(f"  작업 디렉토리: {self.work_dir}")
+                print(f"  스크린샷 기능: {'✅ 활성화' if HAS_SCREENSHOT else '❌ 비활성화'}")
                 print("  Slack에서 메시지를 보내세요!")
                 print("  종료: Ctrl+C")
                 print("=" * 50 + "\n")
@@ -375,11 +392,108 @@ class VibeAgent:
 
         self.processing = False
 
+        # 메시지에서 프로젝트 경로 추출 및 저장 (스크린샷용)
+        path_pattern = r'(/[a-zA-Z0-9_\-./]+)'
+        path_matches = re.findall(path_pattern, message)
+        for path in path_matches:
+            if os.path.isdir(path):
+                # 디렉토리면 일단 저장 (프로젝트 타입 무관)
+                self.last_project_path = path
+                logger.info(f"프로젝트 경로 저장: {path}")
+                break
+
+        # 스크린샷 요청 감지 및 프로젝트 스크린샷 생성
+        screenshot_keywords = ['스크린샷', 'screenshot', '캡처', 'capture', '보여줘', 'show me', 'preview', '미리보기', 'ui']
+        wants_screenshot = any(kw in message.lower() for kw in screenshot_keywords)
+        generated_screenshot = None  # 생성된 스크린샷 경로
+
+        if wants_screenshot and HAS_SCREENSHOT:
+            project_dir = None
+            # 스크린샷은 /tmp에 저장 (권한 문제 방지)
+            screenshot_path = '/tmp/vibecheck_screenshot.png'
+
+            # 1. 메시지에서 프로젝트 경로 추출
+            for path in path_matches:
+                if os.path.isdir(path):
+                    # 프로젝트 디렉토리인지 확인
+                    project_info = detect_project_type(path)
+                    if project_info["type"] != "unknown":
+                        project_dir = path
+                        logger.info(f"프로젝트 감지: {path} -> {project_info}")
+                        break
+
+            # 2. 저장된 프로젝트 경로 사용 (이전 대화 컨텍스트)
+            if not project_dir and self.last_project_path and os.path.isdir(self.last_project_path):
+                project_dir = self.last_project_path
+                logger.info(f"저장된 프로젝트 경로 사용: {project_dir}")
+
+            # 3. work_dir 확인
+            if not project_dir:
+                project_info = detect_project_type(self.work_dir)
+                if project_info["type"] != "unknown":
+                    project_dir = self.work_dir
+
+            # 4. 응답에서 HTML 파일 경로 찾기 (폴백)
+            if not project_dir:
+                html_pattern = r'([a-zA-Z0-9_\-./]+\.html)'
+                html_matches = re.findall(html_pattern, result)
+                for html_file in html_matches:
+                    if html_file.startswith('/'):
+                        html_path = html_file
+                    else:
+                        html_path = os.path.join(self.work_dir, html_file)
+                    if os.path.isfile(html_path):
+                        try:
+                            logger.info(f"HTML 파일 스크린샷 생성 중: {html_path}")
+                            loop = asyncio.get_event_loop()
+                            await loop.run_in_executor(
+                                executor,
+                                lambda hp=html_path: html_file_to_screenshot(hp, screenshot_path, width=1200, height=800, full_page=True)
+                            )
+                            logger.info(f"스크린샷 생성 완료: {screenshot_path}")
+                            generated_screenshot = screenshot_path
+                        except Exception as e:
+                            logger.error(f"스크린샷 생성 실패: {e}")
+                        break
+
+            # 프로젝트 스크린샷 생성 (별도 스레드에서 실행 - Playwright Sync API는 asyncio와 호환 안됨)
+            if project_dir:
+                try:
+                    logger.info(f"프로젝트 스크린샷 생성 중: {project_dir}")
+                    loop = asyncio.get_event_loop()
+                    await loop.run_in_executor(
+                        executor,
+                        lambda: screenshot_project(project_dir, screenshot_path, width=1200, height=800, full_page=True)
+                    )
+                    logger.info(f"스크린샷 생성 완료: {screenshot_path}")
+                    generated_screenshot = screenshot_path
+                except Exception as e:
+                    logger.error(f"프로젝트 스크린샷 생성 실패: {e}")
+
         # 새로 생성된 이미지 감지
         new_images = find_new_or_modified_images(self.work_dir, before_images)
         images_data = []
 
+        # 명시적으로 생성된 스크린샷 먼저 추가
+        if generated_screenshot and os.path.isfile(generated_screenshot):
+            b64 = image_to_base64(generated_screenshot)
+            if b64:
+                images_data.append({
+                    "filename": "screenshot.png",
+                    "data": b64
+                })
+                logger.info(f"스크린샷 이미지 추가: screenshot.png")
+                # 스크린샷 파일 삭제 (임시 파일)
+                try:
+                    os.remove(generated_screenshot)
+                    logger.info("스크린샷 파일 삭제됨")
+                except:
+                    pass
+
         for img_path in new_images[:5]:  # 최대 5개
+            # 이미 추가된 스크린샷은 건너뛰기
+            if generated_screenshot and img_path == generated_screenshot:
+                continue
             b64 = image_to_base64(img_path)
             if b64:
                 images_data.append({
@@ -387,6 +501,68 @@ class VibeAgent:
                     "data": b64
                 })
                 logger.info(f"이미지 감지: {os.path.basename(img_path)}")
+
+        # 이미지 전달 요청 키워드
+        image_request_keywords = ['이미지', 'image', '전달', 'send', '보내', '첨부', 'attach']
+        wants_image = any(kw in message.lower() for kw in image_request_keywords)
+
+        # 응답에서 언급된 이미지 경로 추출 및 전송
+        if not images_data or wants_image:  # 이미지가 없거나 명시적 요청 시
+            # 1. 절대 경로 패턴
+            img_path_pattern = r'(/[a-zA-Z0-9_\-./]+\.(?:png|jpg|jpeg|gif|webp|bmp))'
+            mentioned_images = re.findall(img_path_pattern, result, re.IGNORECASE)
+
+            # 메시지에서도 이미지 경로 추출
+            msg_images = re.findall(img_path_pattern, message, re.IGNORECASE)
+            mentioned_images = mentioned_images + msg_images
+
+            # 2. 파일명만 있는 경우 (예: 01-hero.png)
+            filename_pattern = r'[\s\-]([a-zA-Z0-9_\-]+\.(?:png|jpg|jpeg|gif|webp|bmp))'
+            mentioned_filenames = re.findall(filename_pattern, result, re.IGNORECASE)
+
+            added_paths = set()
+
+            # 절대 경로 이미지 처리
+            for img_path in mentioned_images[:10]:
+                if img_path in added_paths:
+                    continue
+                if os.path.isfile(img_path):
+                    b64 = image_to_base64(img_path)
+                    if b64:
+                        images_data.append({
+                            "filename": os.path.basename(img_path),
+                            "data": b64
+                        })
+                        added_paths.add(img_path)
+                        logger.info(f"응답에서 이미지 추출: {os.path.basename(img_path)}")
+
+            # 파일명만 있는 경우 - last_project_path에서 찾기
+            if len(images_data) < 10 and self.last_project_path:
+                search_dirs = [
+                    self.last_project_path,
+                    os.path.join(self.last_project_path, 'screenshots'),
+                    os.path.join(self.last_project_path, 'images'),
+                    os.path.join(self.last_project_path, 'assets'),
+                ]
+                for filename in mentioned_filenames[:10]:
+                    if len(images_data) >= 10:
+                        break
+                    for search_dir in search_dirs:
+                        if not os.path.isdir(search_dir):
+                            continue
+                        img_path = os.path.join(search_dir, filename)
+                        if img_path in added_paths:
+                            continue
+                        if os.path.isfile(img_path):
+                            b64 = image_to_base64(img_path)
+                            if b64:
+                                images_data.append({
+                                    "filename": filename,
+                                    "data": b64
+                                })
+                                added_paths.add(img_path)
+                                logger.info(f"프로젝트 폴더에서 이미지 찾음: {filename}")
+                            break
 
         # 결과 전송
         if self.is_ws_open():

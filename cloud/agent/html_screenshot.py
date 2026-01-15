@@ -295,6 +295,21 @@ def screenshot_project(
                 pass
 
     else:
+        # unknown 타입: 재귀적으로 HTML 파일 찾기
+        import glob as glob_module
+        html_files = glob_module.glob(os.path.join(project_dir, '**/*.html'), recursive=True)
+        if html_files:
+            # index.html 우선
+            index_files = [f for f in html_files if f.endswith('index.html')]
+            target_html = index_files[0] if index_files else html_files[0]
+            print(f"HTML 파일 발견: {target_html}")
+            return html_file_to_screenshot(
+                target_html,
+                output_path,
+                width=width,
+                height=height,
+                full_page=full_page
+            )
         raise ValueError(f"지원하지 않는 프로젝트 타입: {project_info['type']}")
 
 
