@@ -1,52 +1,90 @@
 # VibeCheck
 
-> **Talk to your server directly from Slack.**
+> **Remote control Claude Code from Slack.**
 
 [![English](https://img.shields.io/badge/Language-English-blue)](./README.md)
 [![Korean](https://img.shields.io/badge/Language-한국어-red)](./README_kr.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/)
-[![Waitlist](https://img.shields.io/badge/Cloud_Version-Join_Waitlist-39FF14?style=flat&logo=google-forms&logoColor=black)](https://NestozAI.github.io/VibeCheck)
+[![PyPI](https://img.shields.io/pypi/v/vibecheck-agent?color=green)](https://pypi.org/project/vibecheck-agent/)
 
-**VibeCheck** acts as a bridge between Slack and your local server. Execute code, generate visualizations, and manage files - all from your Slack workspace with a security approval system.
+**VibeCheck** lets you control Claude Code CLI running on your server via Slack DM. Write and edit code from anywhere - home, cafe, or on the go.
 
 ---
 
-### 🚀 Want to use it without any setup?
+## Choose Your Version
 
-**Tired of complex server configuration and installation?**
-With VibeCheck Cloud, connect to Slack once and start using it immediately. (No GPU server required!)
-
-| **🛠️ Self-Hosted (Open Source)** | **☁️ Cloud / Premium (Waitlist)** |
+| **☁️ Cloud Version** | **🛠️ Self-Hosted (Open Source)** |
 | :--- | :--- |
-| ✅ **Free** (use your own server) | ⚡ **No installation** (sign up and use instantly) |
-| 💻 Use your own GPU/CPU resources | 🧠 High-performance Cloud GPU support (coming soon) |
-| 🔧 Self-installation & maintenance | ☕ **Zero maintenance** (24/7 uptime) |
-| [👇 **See installation guide below**](#quick-start) | [👉 **[Join the Waitlist]**](https://NestozAI.github.io/VibeCheck) |
-
-> 🎁 **Join the waitlist now and get `1 month free` when we launch.**
+| ⚡ **No server setup** - just install and go | ✅ **Free** - use your own server |
+| 🔑 One-click Slack OAuth | 💻 Full control over your environment |
+| 📦 `pip install vibecheck-agent` | 🔧 Self-installation & maintenance |
+| [👉 **Get Started**](https://vibecheck-production.up.railway.app) | [👇 **See installation guide below**](#self-hosted-setup) |
 
 ---
 
-![Architecture](./assets/architecture.png)
+## Cloud Version (Recommended)
+
+The easiest way to use VibeCheck. No Slack app configuration needed!
+
+### Quick Start
+
+#### 1. Install VibeCheck to Slack
+Visit [vibecheck-production.up.railway.app](https://vibecheck-production.up.railway.app) and click **"Add to Slack"**
+
+#### 2. Get Your API Key
+Send any DM to the VibeCheck bot in Slack. You'll receive your API key automatically.
+
+#### 3. Install & Run Agent
+```bash
+pip install vibecheck-agent
+vibecheck-agent --key YOUR_API_KEY --dir /path/to/your/project
+```
+
+That's it! Now send messages to VibeCheck bot in Slack.
+
+### Agent Options
+
+```bash
+vibecheck-agent --key YOUR_API_KEY --dir /path/to/project
+
+Options:
+  --key    Your VibeCheck API key (vibe_sk_...)
+  --dir    Working directory (default: current directory)
+  --server Custom server URL (optional)
+```
+
+---
 
 ## Demo
 
+![Architecture](./assets/architecture.png)
+
+*System Architecture: Slack ↔ Cloud Server ↔ Local Agent ↔ Claude Code*
+
 ![UX Demo](./assets/ux_demo.png)
 
-*Ask VibeCheck to render UI, modify designs, and get instant visual feedback - all from Slack.*
+*Request UI rendering, design changes, and get instant visual feedback - all from Slack.*
+
+---
 
 ## Features
 
-- **Natural Language Coding** - Chat with AI to write, modify, and execute code
-- **Image Generation** - Generate charts and visualizations, automatically uploaded to Slack
+- **Natural Language Coding** - Chat with Claude Code to write, modify, and execute code
+- **Visual Feedback** - Generate UI screenshots and visualizations, automatically uploaded to Slack
 - **Security Layer** - Path-based access control with approval system
-- **Safe System Commands** - Auto-approved read-only commands (nvidia-smi, df, etc.)
 - **Session Continuity** - Conversations persist across messages
+- **Screenshot Generation** - Automatic HTML/project preview screenshots
 
-## Quick Start
+---
 
-### Linux / macOS
+## Self-Hosted Setup
+
+For users who want full control over their server and Slack app.
+
+### Quick Start
+
+#### Linux / macOS
 
 ```bash
 git clone https://github.com/NestozAI/VibeCheck
@@ -55,7 +93,7 @@ cd VibeCheck/self-hosted
 ./run.sh
 ```
 
-### Windows
+#### Windows
 
 ```cmd
 git clone https://github.com/NestozAI/VibeCheck
@@ -64,15 +102,18 @@ setup.bat
 run.bat
 ```
 
-## Slack App Setup
+### Slack App Setup (Self-Hosted Only)
 
-### Step 1: Create a Slack App
+<details>
+<summary>Click to expand Slack App configuration guide</summary>
+
+#### Step 1: Create a Slack App
 
 1. Go to [api.slack.com/apps](https://api.slack.com/apps)
 2. Click **"Create New App"** → **"From scratch"**
 3. Enter App Name (e.g., "VibeCheck") and select your workspace
 
-### Step 2: Enable Socket Mode
+#### Step 2: Enable Socket Mode
 
 1. Navigate to **Settings → Socket Mode**
 2. Toggle **Enable Socket Mode** to ON
@@ -81,7 +122,7 @@ run.bat
    - Scope: `connections:write`
 4. Copy the token starting with `xapp-...` → This is your `SLACK_APP_TOKEN`
 
-### Step 3: Configure Bot Token Scopes
+#### Step 3: Configure Bot Token Scopes
 
 Navigate to **OAuth & Permissions → Bot Token Scopes** and add:
 
@@ -94,7 +135,7 @@ Navigate to **OAuth & Permissions → Bot Token Scopes** and add:
 | `im:write` | Start direct messages |
 | `users:read` | View user information |
 
-### Step 4: Enable Events
+#### Step 4: Enable Events
 
 1. Navigate to **Event Subscriptions**
 2. Toggle **Enable Events** to ON
@@ -103,24 +144,24 @@ Navigate to **OAuth & Permissions → Bot Token Scopes** and add:
    - `app_mention` - Respond to @mentions
    - `app_home_opened` - Show home tab
 
-### Step 5: Enable Interactivity
+#### Step 5: Enable Interactivity
 
 1. Navigate to **Interactivity & Shortcuts**
 2. Toggle **Interactivity** to ON
 
-### Step 6: Enable App Home
+#### Step 6: Enable App Home
 
 1. Navigate to **App Home**
 2. Enable **Home Tab** and **Messages Tab**
 3. Check **"Allow users to send Slash commands and messages from the messages tab"**
 
-### Step 7: Install App to Workspace
+#### Step 7: Install App to Workspace
 
 1. Navigate to **OAuth & Permissions**
 2. Click **"Install to Workspace"**
 3. Copy the **Bot User OAuth Token** (`xoxb-...`) → This is your `SLACK_BOT_TOKEN`
 
-### Step 8: Configure Environment
+#### Step 8: Configure Environment
 
 Create `.env` file in `self-hosted/` directory:
 
@@ -130,6 +171,10 @@ SLACK_APP_TOKEN=xapp-your-app-token-here
 WORK_DIR=/path/to/your/project
 ```
 
+</details>
+
+---
+
 ## Security System
 
 ![Security Flow](./assets/security_flow.png)
@@ -138,8 +183,8 @@ VibeCheck includes a path-based security system to protect your file system.
 
 ### How It Works
 
-1. **Trusted Paths**: Only the `WORK_DIR` is trusted by default
-2. **Path Detection**: When you mention a path outside trusted directories, the bot detects it
+1. **Trusted Paths**: Only the working directory is trusted by default
+2. **Path Detection**: When Claude tries to access paths outside trusted directories, the bot detects it
 3. **Approval UI**: A Block Kit message appears with approval options:
    - **Approve & Execute** - One-time access
    - **Approve (Permanent)** - Add path to trusted list
@@ -155,36 +200,26 @@ cat /proc/cpuinfo, cat /proc/meminfo, ps, top,
 ls, pwd, date, which, echo
 ```
 
-### Bot Commands
-
-| Command | Description |
-|---------|-------------|
-| `help` | Show help message |
-| `reset` | Start a new conversation |
-| `/paths` | View trusted paths list |
-| `/trust /path` | Add path to trusted list |
+---
 
 ## Usage Examples
 
-### Basic Coding
+### Building UI
 
 ```
-User: Show me the current file structure
+User: Create a login form with email and password fields, modern dark theme
 
-Bot: 📂 Project structure:
-     ├── src/
-     │   ├── index.ts
-     │   └── utils.ts
-     └── package.json
+Bot: I've created index.html with a login form...
+     [Uploads screenshot of the rendered UI]
 ```
 
-### Data Visualization
+### Code Modification
 
 ```
-User: Plot y=x², y=2x, and y=3 on the same graph
+User: Add form validation to check email format
 
-Bot: [Uploads graph image]
-     📊 Generated image: quadratic_comparison.png
+Bot: I've added email validation...
+     [Uploads updated screenshot]
 ```
 
 ### System Monitoring
@@ -198,51 +233,58 @@ Bot: nvidia-smi output:
      ...
 ```
 
-### Security Approval
-
-```
-User: Read the logs in /var/log/myapp/
-
-Bot: ⚠️ Security Warning
-     AI is trying to access:
-     • /var/log/myapp/
-
-     [✅ Approve & Execute] [✅ Approve (Permanent)] [❌ Deny]
-```
+---
 
 ## Requirements
 
 - Python 3.8+
-- AI Coding CLI tool
+- Claude Code CLI (`claude` command)
 - Slack Workspace
+
+---
 
 ## File Structure
 
 ```
 VibeCheck/
+├── cloud/
+│   ├── server/          # Cloud server (Railway)
+│   │   ├── app.py       # FastAPI server
+│   │   └── models.py    # Database models
+│   └── agent/           # PyPI package source
+│       ├── agent.py     # Agent implementation
+│       └── html_screenshot.py
 ├── self-hosted/
-│   ├── main.py          # Main bot application
-│   ├── cleaner.py       # Output formatting
+│   ├── main.py          # Self-hosted bot
 │   ├── setup.sh         # Installation script
-│   ├── run.sh           # Run script
-│   └── .env             # Environment variables
+│   └── run.sh           # Run script
 ├── assets/
 │   ├── architecture.png
+│   ├── ux_demo.png
 │   └── security_flow.png
 └── README.md
 ```
 
+---
+
 ## Troubleshooting
 
+### Agent not connecting
+- Check your API key is correct
+- Ensure `claude` CLI is installed and accessible
+- Check internet connection
+
 ### Bot not responding to DMs
-- Check **Event Subscriptions** → `message.im` is subscribed
-- Check **App Home** → Messages Tab is enabled
+- (Self-hosted) Check **Event Subscriptions** → `message.im` is subscribed
+- (Cloud) Make sure Agent is running
 
 ### Image upload failing
-- Add `files:write` scope and reinstall app
+- (Self-hosted) Add `files:write` scope and reinstall app
 
-### Path approval buttons not working
-- Enable **Interactivity** in Slack App settings
+### Screenshot not generating
+- Install playwright: `pip install playwright && playwright install chromium`
+
+---
 
 ## License
 
@@ -251,3 +293,11 @@ MIT
 ## Contributing
 
 Contributions are welcome! Please open an issue or submit a pull request.
+
+---
+
+<p align="center">
+  <a href="https://vibecheck-production.up.railway.app">
+    <img src="https://img.shields.io/badge/Try_VibeCheck_Cloud-00ff00?style=for-the-badge&logo=slack&logoColor=black" alt="Try VibeCheck Cloud">
+  </a>
+</p>
