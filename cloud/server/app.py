@@ -15,15 +15,17 @@ from typing import Dict, List
 from contextlib import asynccontextmanager
 from urllib.parse import parse_qs
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request, Form
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request, Form, Cookie, Response
 from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
+import secrets
+from datetime import timedelta
 from dotenv import load_dotenv
 from slack_sdk.web.async_client import AsyncWebClient
 from slack_sdk.oauth import AuthorizeUrlGenerator
 from slack_sdk.oauth.installation_store import Installation
 import httpx
 
-from models import init_db, User, Workspace, SessionLocal
+from models import init_db, User, Workspace, Session, Message, SessionLocal
 
 # 환경변수 로드
 load_dotenv()
@@ -614,7 +616,10 @@ async def root():
                     서버에서 실행 중인 Claude Code CLI를 Slack DM으로 제어하세요.
                     집, 카페, 이동 중 어디서든 코드를 작성하고 수정할 수 있습니다.
                 </p>
-                <a href="{install_url}" class="btn">Slack에 추가하기</a>
+                <div style="display: flex; gap: 16px; justify-content: center; flex-wrap: wrap;">
+                    <a href="{install_url}" class="btn">Slack에 추가하기</a>
+                    <a href="/auth/login" class="btn" style="background: #333; color: #fff; box-shadow: none;">로그인 / 대시보드</a>
+                </div>
             </section>
         </div>
 
@@ -812,6 +817,475 @@ async def slack_oauth_callback(code: str = None, error: str = None):
     </body>
     </html>
     """)
+
+
+# =============================================================================
+# Sign in with Slack (유저 로그인)
+# =============================================================================
+
+# Sign in with Slack 스코프 (유저 정보 읽기)
+USER_SCOPES = ["identity.basic", "identity.email", "identity.avatar"]
+
+
+@app.get("/auth/login")
+async def auth_login():
+    """Sign in with Slack 시작"""
+    if not SLACK_CLIENT_ID:
+        return HTMLResponse("<h1>Error: SLACK_CLIENT_ID not configured</h1>")
+
+    authorize_url = (
+        f"https://slack.com/oauth/v2/authorize?"
+        f"client_id={SLACK_CLIENT_ID}&"
+        f"user_scope={','.join(USER_SCOPES)}&"
+        f"redirect_uri={BASE_URL}/auth/callback"
+    )
+    return RedirectResponse(authorize_url)
+
+
+@app.get("/auth/callback")
+async def auth_callback(code: str = None, error: str = None):
+    """Sign in with Slack 콜백"""
+    if error:
+        return HTMLResponse(f"<h1>Error: {error}</h1>")
+
+    if not code:
+        return HTMLResponse("<h1>Error: No code provided</h1>")
+
+    # 토큰 교환
+    async with httpx.AsyncClient() as client:
+        response = await client.post(
+            "https://slack.com/api/oauth.v2.access",
+            data={
+                "client_id": SLACK_CLIENT_ID,
+                "client_secret": SLACK_CLIENT_SECRET,
+                "code": code,
+                "redirect_uri": f"{BASE_URL}/auth/callback"
+            }
+        )
+        data = response.json()
+
+    if not data.get("ok"):
+        logger.error(f"Sign in 실패: {data}")
+        return HTMLResponse(f"<h1>로그인 실패: {data.get('error')}</h1>")
+
+    # 유저 정보 가져오기
+    authed_user = data.get("authed_user", {})
+    user_token = authed_user.get("access_token")
+    slack_user_id = authed_user.get("id")
+    team_id = data.get("team", {}).get("id")
+
+    # Slack API로 유저 프로필 가져오기
+    async with httpx.AsyncClient() as client:
+        identity_response = await client.get(
+            "https://slack.com/api/users.identity",
+            headers={"Authorization": f"Bearer {user_token}"}
+        )
+        identity_data = identity_response.json()
+
+    user_info = identity_data.get("user", {})
+    email = user_info.get("email")
+    display_name = user_info.get("name")
+    avatar_url = user_info.get("image_192")
+
+    db = SessionLocal()
+    try:
+        # 유저 찾기 또는 생성
+        user = db.query(User).filter(
+            User.slack_user_id == slack_user_id,
+            User.slack_team_id == team_id
+        ).first()
+
+        if not user:
+            user = User(
+                slack_user_id=slack_user_id,
+                slack_team_id=team_id,
+                email=email,
+                display_name=display_name,
+                avatar_url=avatar_url
+            )
+            db.add(user)
+        else:
+            # 프로필 업데이트
+            user.email = email
+            user.display_name = display_name
+            user.avatar_url = avatar_url
+
+        db.commit()
+        db.refresh(user)
+
+        # 세션 생성
+        session_token = secrets.token_urlsafe(32)
+        session = Session(
+            session_token=session_token,
+            user_id=user.id,
+            expires_at=datetime.utcnow() + timedelta(days=30)
+        )
+        db.add(session)
+        db.commit()
+
+        logger.info(f"유저 로그인: {display_name} ({email})")
+
+        # 대시보드로 리다이렉트 (쿠키 설정)
+        response = RedirectResponse("/dashboard", status_code=302)
+        response.set_cookie(
+            key="session_token",
+            value=session_token,
+            httponly=True,
+            max_age=60 * 60 * 24 * 30,  # 30일
+            samesite="lax"
+        )
+        return response
+
+    finally:
+        db.close()
+
+
+@app.get("/auth/logout")
+async def auth_logout(response: Response, session_token: str = Cookie(None)):
+    """로그아웃"""
+    if session_token:
+        db = SessionLocal()
+        try:
+            session = db.query(Session).filter(Session.session_token == session_token).first()
+            if session:
+                db.delete(session)
+                db.commit()
+        finally:
+            db.close()
+
+    response = RedirectResponse("/", status_code=302)
+    response.delete_cookie("session_token")
+    return response
+
+
+def get_current_user(session_token: str = None):
+    """현재 로그인한 유저 가져오기"""
+    if not session_token:
+        return None
+
+    db = SessionLocal()
+    try:
+        session = db.query(Session).filter(
+            Session.session_token == session_token,
+            Session.expires_at > datetime.utcnow()
+        ).first()
+
+        if not session:
+            return None
+
+        user = db.query(User).filter(User.id == session.user_id).first()
+        return user
+    finally:
+        db.close()
+
+
+# =============================================================================
+# User Dashboard
+# =============================================================================
+
+def dashboard_html(user: User) -> str:
+    """대시보드 HTML 생성"""
+    allowlist = json.loads(user.allowlist) if user.allowlist else DEFAULT_ALLOWLIST.copy()
+    allowlist_html = "".join([f'<li><code>{item}</code></li>' for item in allowlist])
+
+    agent_status = "🟢 연결됨" if user.agent_connected else "🔴 연결 안됨"
+    plan_badge = '<span class="badge pro">PRO</span>' if user.plan == "pro" else '<span class="badge free">FREE</span>'
+
+    return f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Dashboard - VibeCheck</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <style>
+            * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+            body {{
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+                background: #0a0a0a;
+                color: #e0e0e0;
+                min-height: 100vh;
+            }}
+            .header {{
+                background: #111;
+                border-bottom: 1px solid #222;
+                padding: 16px 24px;
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+            }}
+            .header .logo {{
+                font-size: 1.5rem;
+                font-weight: 700;
+                color: #00ff00;
+            }}
+            .header .user-info {{
+                display: flex;
+                align-items: center;
+                gap: 12px;
+            }}
+            .header .avatar {{
+                width: 36px;
+                height: 36px;
+                border-radius: 50%;
+            }}
+            .header .logout {{
+                color: #888;
+                text-decoration: none;
+                font-size: 0.9rem;
+            }}
+            .header .logout:hover {{
+                color: #fff;
+            }}
+            .container {{
+                max-width: 900px;
+                margin: 0 auto;
+                padding: 40px 24px;
+            }}
+            .welcome {{
+                margin-bottom: 40px;
+            }}
+            .welcome h1 {{
+                font-size: 1.8rem;
+                color: #fff;
+                margin-bottom: 8px;
+            }}
+            .welcome p {{
+                color: #888;
+            }}
+            .card {{
+                background: #111;
+                border: 1px solid #222;
+                border-radius: 12px;
+                padding: 24px;
+                margin-bottom: 24px;
+            }}
+            .card h2 {{
+                font-size: 1.2rem;
+                color: #fff;
+                margin-bottom: 16px;
+                display: flex;
+                align-items: center;
+                gap: 8px;
+            }}
+            .badge {{
+                font-size: 0.7rem;
+                padding: 4px 8px;
+                border-radius: 4px;
+                font-weight: 600;
+            }}
+            .badge.free {{
+                background: #333;
+                color: #888;
+            }}
+            .badge.pro {{
+                background: #00ff00;
+                color: #0a0a0a;
+            }}
+            .stat-grid {{
+                display: grid;
+                grid-template-columns: repeat(3, 1fr);
+                gap: 16px;
+            }}
+            .stat {{
+                text-align: center;
+                padding: 16px;
+                background: #1a1a1a;
+                border-radius: 8px;
+            }}
+            .stat .value {{
+                font-size: 2rem;
+                font-weight: 700;
+                color: #00ff00;
+            }}
+            .stat .label {{
+                font-size: 0.85rem;
+                color: #666;
+                margin-top: 4px;
+            }}
+            .api-key {{
+                background: #1a1a1a;
+                padding: 16px;
+                border-radius: 8px;
+                font-family: monospace;
+                font-size: 0.9rem;
+                color: #00ff00;
+                word-break: break-all;
+                position: relative;
+            }}
+            .api-key .copy-btn {{
+                position: absolute;
+                right: 12px;
+                top: 50%;
+                transform: translateY(-50%);
+                background: #333;
+                border: none;
+                color: #fff;
+                padding: 8px 12px;
+                border-radius: 4px;
+                cursor: pointer;
+            }}
+            .api-key .copy-btn:hover {{
+                background: #444;
+            }}
+            .agent-status {{
+                display: flex;
+                align-items: center;
+                gap: 8px;
+                font-size: 1.1rem;
+            }}
+            .allowlist-list {{
+                list-style: none;
+            }}
+            .allowlist-list li {{
+                padding: 8px 0;
+                border-bottom: 1px solid #222;
+            }}
+            .allowlist-list li:last-child {{
+                border-bottom: none;
+            }}
+            .allowlist-list code {{
+                background: #1a1a1a;
+                padding: 4px 8px;
+                border-radius: 4px;
+                font-size: 0.85rem;
+            }}
+            .setup-code {{
+                background: #1a1a1a;
+                padding: 16px;
+                border-radius: 8px;
+                overflow-x: auto;
+            }}
+            .setup-code pre {{
+                color: #00ff00;
+                font-size: 0.85rem;
+                margin: 0;
+            }}
+            .btn {{
+                display: inline-block;
+                background: #00ff00;
+                color: #0a0a0a;
+                padding: 12px 24px;
+                border-radius: 6px;
+                text-decoration: none;
+                font-weight: 600;
+                font-size: 0.9rem;
+                border: none;
+                cursor: pointer;
+            }}
+            .btn:hover {{
+                opacity: 0.9;
+            }}
+            .btn-secondary {{
+                background: #333;
+                color: #fff;
+            }}
+            @media (max-width: 600px) {{
+                .stat-grid {{
+                    grid-template-columns: 1fr;
+                }}
+            }}
+        </style>
+    </head>
+    <body>
+        <div class="header">
+            <div class="logo">VibeCheck</div>
+            <div class="user-info">
+                <img src="{user.avatar_url or ''}" alt="" class="avatar">
+                <span>{user.display_name or user.slack_user_id}</span>
+                <a href="/auth/logout" class="logout">로그아웃</a>
+            </div>
+        </div>
+        <div class="container">
+            <div class="welcome">
+                <h1>안녕하세요, {user.display_name or 'User'}님! {plan_badge}</h1>
+                <p>VibeCheck 대시보드에서 Agent 상태와 사용량을 확인하세요.</p>
+            </div>
+
+            <div class="card">
+                <h2>📊 사용량</h2>
+                <div class="stat-grid">
+                    <div class="stat">
+                        <div class="value">{user.usage_count}</div>
+                        <div class="label">사용한 메시지</div>
+                    </div>
+                    <div class="stat">
+                        <div class="value">{user.usage_limit}</div>
+                        <div class="label">월 한도</div>
+                    </div>
+                    <div class="stat">
+                        <div class="value">{max(0, user.usage_limit - user.usage_count)}</div>
+                        <div class="label">남은 메시지</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2>🤖 Agent 상태</h2>
+                <div class="agent-status">{agent_status}</div>
+            </div>
+
+            <div class="card">
+                <h2>🔑 API Key</h2>
+                <div class="api-key">
+                    {user.api_key}
+                    <button class="copy-btn" onclick="navigator.clipboard.writeText('{user.api_key}')">복사</button>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2>🚀 Agent 설치 방법</h2>
+                <div class="setup-code">
+                    <pre>pip install vibecheck-agent
+vibecheck-agent --key={user.api_key}</pre>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2>🔐 Allowlist (허용된 권한)</h2>
+                <ul class="allowlist-list">
+                    {allowlist_html}
+                </ul>
+                <p style="color: #666; font-size: 0.85rem; margin-top: 16px;">
+                    💡 Slack에서 <code>/permissions</code>를 입력하면 권한을 관리할 수 있습니다.
+                </p>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+
+
+@app.get("/dashboard")
+async def dashboard(session_token: str = Cookie(None)):
+    """유저 대시보드"""
+    user = get_current_user(session_token)
+
+    if not user:
+        return RedirectResponse("/auth/login")
+
+    return HTMLResponse(dashboard_html(user))
+
+
+@app.post("/api/regenerate-key")
+async def regenerate_api_key(session_token: str = Cookie(None)):
+    """API Key 재생성"""
+    user = get_current_user(session_token)
+
+    if not user:
+        return JSONResponse({"error": "Unauthorized"}, status_code=401)
+
+    db = SessionLocal()
+    try:
+        db_user = db.query(User).filter(User.id == user.id).first()
+        if db_user:
+            new_key = f"vibe_sk_{secrets.token_hex(16)}"
+            db_user.api_key = new_key
+            db.commit()
+            return JSONResponse({"api_key": new_key})
+    finally:
+        db.close()
+
+    return JSONResponse({"error": "Failed"}, status_code=500)
 
 
 # =============================================================================
