@@ -1503,7 +1503,7 @@ async def handle_block_actions(payload: dict):
                     # 버튼 메시지 업데이트
                     await client.chat_update(
                         channel=channel_id,
-                        ts=body["message"]["ts"],
+                        ts=payload["message"]["ts"],
                         text="✅ 승인됨 (1회)",
                         blocks=build_status_blocks("success", "승인됨 (1회) - 실행 중...")
                     )
@@ -1530,7 +1530,7 @@ async def handle_block_actions(payload: dict):
                     # 버튼 메시지 업데이트
                     await client.chat_update(
                         channel=channel_id,
-                        ts=body["message"]["ts"],
+                        ts=payload["message"]["ts"],
                         text="✅ 승인됨 (영구)",
                         blocks=build_status_blocks("success", "승인됨 (영구) - 경로가 신뢰 목록에 추가됨")
                     )
@@ -1550,7 +1550,7 @@ async def handle_block_actions(payload: dict):
                     # 버튼 메시지 업데이트
                     await client.chat_update(
                         channel=channel_id,
-                        ts=body["message"]["ts"],
+                        ts=payload["message"]["ts"],
                         text="❌ 거절됨",
                         blocks=build_status_blocks("error", "접근이 거절되었습니다.")
                     )
