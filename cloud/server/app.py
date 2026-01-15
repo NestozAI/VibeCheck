@@ -398,14 +398,14 @@ async def debug_db():
 # =============================================================================
 
 @app.get("/")
-async def root():
-    """메인 페이지"""
+async def root(lang: str = None):
+    """메인 페이지 (한/영)"""
     install_url = f"/slack/install"
     return HTMLResponse(f"""
     <!DOCTYPE html>
     <html>
     <head>
-        <title>VibeCheck - Slack에서 Claude Code 원격 제어</title>
+        <title>VibeCheck - Remote Control Claude Code via Slack</title>
         <meta name="viewport" content="width=device-width, initial-scale=1">
         <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect x='0' y='0' width='512' height='512' rx='80' ry='80' fill='%230a0a0a'/%3E%3Cpath d='M 40 280 L 120 280 L 160 280 L 200 320 L 256 140 L 310 320 L 350 280 L 400 280 L 472 280' fill='none' stroke='%2300ff00' stroke-width='8' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpath d='M 380 400 L 405 430 L 460 360' fill='none' stroke='%2300ff00' stroke-width='6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
         <style>
@@ -659,6 +659,42 @@ async def root():
                 border-top: 1px solid #1a1a1a;
             }}
 
+            /* Language Switcher */
+            .lang-switcher {{
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                display: flex;
+                gap: 8px;
+                z-index: 1000;
+            }}
+            .lang-btn {{
+                background: #1a1a1a;
+                border: 1px solid #333;
+                color: #888;
+                padding: 6px 12px;
+                border-radius: 6px;
+                cursor: pointer;
+                font-size: 0.85rem;
+                transition: all 0.2s;
+            }}
+            .lang-btn:hover {{
+                border-color: #00ff00;
+                color: #00ff00;
+            }}
+            .lang-btn.active {{
+                background: #00ff00;
+                color: #0a0a0a;
+                border-color: #00ff00;
+            }}
+            [lang="en"] {{ display: none; }}
+            [lang="ko"] {{ display: block; }}
+            body.en [lang="en"] {{ display: block; }}
+            body.en [lang="ko"] {{ display: none; }}
+            span[lang="en"], span[lang="ko"] {{ display: inline; }}
+            body.en span[lang="ko"] {{ display: none; }}
+            body:not(.en) span[lang="en"] {{ display: none; }}
+
             /* Responsive */
             @media (max-width: 768px) {{
                 .steps {{
@@ -670,10 +706,20 @@ async def root():
                 .logo {{
                     font-size: 2.5rem;
                 }}
+                .lang-switcher {{
+                    top: 10px;
+                    right: 10px;
+                }}
             }}
         </style>
     </head>
     <body>
+        <!-- Language Switcher -->
+        <div class="lang-switcher">
+            <button class="lang-btn active" onclick="setLang('ko')">한국어</button>
+            <button class="lang-btn" onclick="setLang('en')">English</button>
+        </div>
+
         <div class="container">
             <section class="hero">
                 <!-- Logo SVG -->
@@ -714,29 +760,47 @@ async def root():
                     <circle cx="452" cy="60" r="6" fill="#00ff00" opacity="0.6" filter="url(#glow)"/>
                 </svg>
                 <div class="logo">VibeCheck</div>
-                <p class="tagline">Slack에서 <strong>Claude Code</strong>를 원격 제어</p>
+                <p class="tagline">
+                    <span lang="ko">Slack에서 <strong>Claude Code</strong>를 원격 제어</span>
+                    <span lang="en">Remote Control <strong>Claude Code</strong> via Slack</span>
+                </p>
                 <p class="description">
-                    서버에서 실행 중인 Claude Code CLI를 Slack DM으로 제어하세요.
-                    집, 카페, 이동 중 어디서든 코드를 작성하고 수정할 수 있습니다.
+                    <span lang="ko">서버에서 실행 중인 Claude Code CLI를 Slack DM으로 제어하세요. 집, 카페, 이동 중 어디서든 코드를 작성하고 수정할 수 있습니다.</span>
+                    <span lang="en">Control Claude Code CLI running on your server via Slack DM. Write and edit code from anywhere - home, cafe, or on the go.</span>
                 </p>
                 <div style="display: flex; gap: 16px; justify-content: center; flex-wrap: wrap;">
-                    <a href="{install_url}" class="btn">Slack에 추가하기</a>
-                    <a href="/auth/login" class="btn" style="background: #333; color: #fff; box-shadow: none;">로그인 / 대시보드</a>
+                    <a href="{install_url}" class="btn">
+                        <span lang="ko">Slack에 추가하기</span>
+                        <span lang="en">Add to Slack</span>
+                    </a>
+                    <a href="/auth/login" class="btn" style="background: #333; color: #fff; box-shadow: none;">
+                        <span lang="ko">로그인 / 대시보드</span>
+                        <span lang="en">Login / Dashboard</span>
+                    </a>
                 </div>
             </section>
         </div>
 
         <section class="demo">
             <div class="container">
-                <h2>이렇게 동작해요</h2>
+                <h2>
+                    <span lang="ko">이렇게 동작해요</span>
+                    <span lang="en">How It Works</span>
+                </h2>
                 <div class="demo-images">
                     <div class="demo-img-wrapper">
                         <img src="https://raw.githubusercontent.com/NestozAI/VibeCheck/main/assets/ux_demo.png" alt="VibeCheck UX Demo">
-                        <p class="demo-img-caption">Slack에서 UI 렌더링, 디자인 수정을 요청하고 즉각적인 시각적 피드백을 받으세요</p>
+                        <p class="demo-img-caption">
+                            <span lang="ko">Slack에서 UI 렌더링, 디자인 수정을 요청하고 즉각적인 시각적 피드백을 받으세요</span>
+                            <span lang="en">Request UI rendering and design changes in Slack, get instant visual feedback</span>
+                        </p>
                     </div>
                     <div class="demo-img-wrapper">
                         <img src="https://raw.githubusercontent.com/NestozAI/VibeCheck/main/assets/architecture.png" alt="VibeCheck Architecture">
-                        <p class="demo-img-caption">시스템 아키텍처: Slack - Cloud Server - Local Agent</p>
+                        <p class="demo-img-caption">
+                            <span lang="ko">시스템 아키텍처: Slack - Cloud Server - Local Agent</span>
+                            <span lang="en">System Architecture: Slack - Cloud Server - Local Agent</span>
+                        </p>
                     </div>
                 </div>
             </div>
@@ -744,22 +808,43 @@ async def root():
 
         <section class="how">
             <div class="container">
-                <h2>3단계로 시작하세요</h2>
+                <h2>
+                    <span lang="ko">3단계로 시작하세요</span>
+                    <span lang="en">Get Started in 3 Steps</span>
+                </h2>
                 <div class="steps">
                     <div class="step">
                         <div class="step-num">1</div>
-                        <h3>Slack 앱 설치</h3>
-                        <p>"Add to Slack" 버튼을 클릭해 워크스페이스에 VibeCheck을 설치하세요.</p>
+                        <h3>
+                            <span lang="ko">Slack 앱 설치</span>
+                            <span lang="en">Install Slack App</span>
+                        </h3>
+                        <p>
+                            <span lang="ko">"Add to Slack" 버튼을 클릭해 워크스페이스에 VibeCheck을 설치하세요.</span>
+                            <span lang="en">Click "Add to Slack" button to install VibeCheck to your workspace.</span>
+                        </p>
                     </div>
                     <div class="step">
                         <div class="step-num">2</div>
-                        <h3>Agent 실행</h3>
-                        <p>서버에서 <code>pip install vibecheck-agent</code> 후 Agent를 실행하세요.</p>
+                        <h3>
+                            <span lang="ko">Agent 실행</span>
+                            <span lang="en">Run Agent</span>
+                        </h3>
+                        <p>
+                            <span lang="ko">서버에서 <code>pip install vibecheck-agent</code> 후 Agent를 실행하세요.</span>
+                            <span lang="en">Run <code>pip install vibecheck-agent</code> on your server, then start the Agent.</span>
+                        </p>
                     </div>
                     <div class="step">
                         <div class="step-num">3</div>
-                        <h3>Slack DM 전송</h3>
-                        <p>VibeCheck 봇에게 DM을 보내면 서버의 Claude가 응답합니다.</p>
+                        <h3>
+                            <span lang="ko">Slack DM 전송</span>
+                            <span lang="en">Send Slack DM</span>
+                        </h3>
+                        <p>
+                            <span lang="ko">VibeCheck 봇에게 DM을 보내면 서버의 Claude가 응답합니다.</span>
+                            <span lang="en">Send a DM to VibeCheck bot, and Claude on your server responds.</span>
+                        </p>
                     </div>
                 </div>
             </div>
@@ -767,28 +852,37 @@ async def root():
 
         <section class="pricing">
             <div class="container">
-                <h2>요금제</h2>
+                <h2>
+                    <span lang="ko">요금제</span>
+                    <span lang="en">Pricing</span>
+                </h2>
                 <div class="plans">
                     <div class="plan">
                         <h3>Free</h3>
-                        <div class="price">$0<span>/월</span></div>
+                        <div class="price">$0<span lang="ko">/월</span><span lang="en">/mo</span></div>
                         <ul>
-                            <li>월 10회 메시지</li>
-                            <li>1개 워크스페이스</li>
-                            <li>커뮤니티 지원</li>
+                            <li><span lang="ko">월 10회 메시지</span><span lang="en">10 messages/month</span></li>
+                            <li><span lang="ko">1개 워크스페이스</span><span lang="en">1 workspace</span></li>
+                            <li><span lang="ko">커뮤니티 지원</span><span lang="en">Community support</span></li>
                         </ul>
-                        <a href="{install_url}" class="btn btn-free">무료로 시작</a>
+                        <a href="{install_url}" class="btn btn-free">
+                            <span lang="ko">무료로 시작</span>
+                            <span lang="en">Start Free</span>
+                        </a>
                     </div>
                     <div class="plan pro">
                         <h3>Pro</h3>
-                        <div class="price">$10<span>/월</span></div>
+                        <div class="price">$10<span lang="ko">/월</span><span lang="en">/mo</span></div>
                         <ul>
-                            <li>무제한 메시지</li>
-                            <li>무제한 워크스페이스</li>
-                            <li>우선 지원</li>
-                            <li>신규 기능 얼리 액세스</li>
+                            <li><span lang="ko">무제한 메시지</span><span lang="en">Unlimited messages</span></li>
+                            <li><span lang="ko">무제한 워크스페이스</span><span lang="en">Unlimited workspaces</span></li>
+                            <li><span lang="ko">우선 지원</span><span lang="en">Priority support</span></li>
+                            <li><span lang="ko">신규 기능 얼리 액세스</span><span lang="en">Early access to new features</span></li>
                         </ul>
-                        <a href="{install_url}" class="btn">Pro 시작하기</a>
+                        <a href="{install_url}" class="btn">
+                            <span lang="ko">Pro 시작하기</span>
+                            <span lang="en">Get Pro</span>
+                        </a>
                     </div>
                 </div>
             </div>
@@ -799,6 +893,38 @@ async def root():
                 <p>VibeCheck by Nestoz</p>
             </div>
         </footer>
+
+        <script>
+            function setLang(lang) {{
+                if (lang === 'en') {{
+                    document.body.classList.add('en');
+                }} else {{
+                    document.body.classList.remove('en');
+                }}
+                // Update button states
+                document.querySelectorAll('.lang-btn').forEach(btn => {{
+                    btn.classList.remove('active');
+                    if ((lang === 'ko' && btn.textContent === '한국어') ||
+                        (lang === 'en' && btn.textContent === 'English')) {{
+                        btn.classList.add('active');
+                    }}
+                }});
+                // Save preference
+                localStorage.setItem('vibecheck-lang', lang);
+            }}
+            // Load saved preference or detect browser language
+            (function() {{
+                const saved = localStorage.getItem('vibecheck-lang');
+                if (saved) {{
+                    setLang(saved);
+                }} else {{
+                    const browserLang = navigator.language || navigator.userLanguage;
+                    if (browserLang && !browserLang.startsWith('ko')) {{
+                        setLang('en');
+                    }}
+                }}
+            }})();
+        </script>
     </body>
     </html>
     """)
