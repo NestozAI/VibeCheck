@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "vibecheck-agent"
-version = "0.1.5"
+version = "0.1.6"
 description = "Slack에서 Claude Code를 원격 제어하는 Agent"
 readme = "README.md"
 license = {text = "MIT"}
@@ -33,5 +33,8 @@ Repository = "https://github.com/NestozAI/VibeCheck"
 [project.scripts]
 vibecheck-agent = "agent:cli_main"
 
+[project.optional-dependencies]
+screenshot = ["playwright>=1.40.0"]
+
 [tool.setuptools]
-py-modules = ["agent"]
+py-modules = ["agent", "html_screenshot"]

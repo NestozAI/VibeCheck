@@ -248,10 +248,7 @@ Bot: nvidia-smi output:
 ```
 VibeCheck/
 ├── cloud/
-│   ├── server/          # Cloud server (Railway)
-│   │   ├── app.py       # FastAPI server
-│   │   └── models.py    # Database models
-│   └── agent/           # PyPI package source
+│   └── agent/           # PyPI package source (vibecheck-agent)
 │       ├── agent.py     # Agent implementation
 │       └── html_screenshot.py
 ├── self-hosted/

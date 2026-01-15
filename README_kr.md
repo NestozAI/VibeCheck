@@ -248,10 +248,7 @@ ls, pwd, date, which, echo
 ```
 VibeCheck/
 ├── cloud/
-│   ├── server/          # 클라우드 서버 (Railway)
-│   │   ├── app.py       # FastAPI 서버
-│   │   └── models.py    # 데이터베이스 모델
-│   └── agent/           # PyPI 패키지 소스
+│   └── agent/           # PyPI 패키지 소스 (vibecheck-agent)
 │       ├── agent.py     # Agent 구현
 │       └── html_screenshot.py
 ├── self-hosted/
