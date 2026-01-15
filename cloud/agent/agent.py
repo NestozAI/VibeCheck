@@ -12,7 +12,9 @@ import asyncio
 import argparse
 import subprocess
 import logging
+import json
 from typing import Optional
+from concurrent.futures import ThreadPoolExecutor
 
 import websockets
 
@@ -30,6 +32,9 @@ logger = logging.getLogger(__name__)
 # Railway 배포 URL
 DEFAULT_SERVER = "wss://vibecheck.nestoz.co/ws/agent"
 
+# CLI 실행을 위한 스레드풀
+executor = ThreadPoolExecutor(max_workers=1)
+
 
 class VibeAgent:
     """VibeCheck Agent"""
@@ -40,9 +45,10 @@ class VibeAgent:
         self.server_url = f"{server_url}?key={api_key}"
         self.session_started = False
         self.ws: Optional[websockets.WebSocketClientProtocol] = None
+        self.processing = False  # CLI 실행 중 플래그
 
-    def run_command(self, message: str) -> str:
-        """로컬에서 CLI 명령 실행"""
+    def run_command_sync(self, message: str) -> str:
+        """로컬에서 CLI 명령 실행 (동기, 스레드에서 실행됨)"""
         cmd = [
             "claude",
             "--print",
@@ -85,12 +91,33 @@ class VibeAgent:
             logger.error(f"실행 오류: {e}")
             return f"실행 오류: {str(e)}"
 
+    async def run_command(self, message: str) -> str:
+        """CLI 명령 실행 (비동기 래퍼)"""
+        loop = asyncio.get_event_loop()
+        return await loop.run_in_executor(executor, self.run_command_sync, message)
+
+    async def ping_loop(self):
+        """주기적으로 ping 전송 (연결 유지)"""
+        while True:
+            try:
+                await asyncio.sleep(15)  # 15초마다 ping
+                if self.ws and not self.ws.closed:
+                    await self.ws.send(json.dumps({"type": "ping"}))
+                    logger.debug("ping 전송")
+            except Exception as e:
+                logger.debug(f"ping 오류: {e}")
+                break
+
     async def connect(self):
         """서버에 연결하고 메시지 처리"""
         logger.info(f"서버 연결 중: {self.server_url[:50]}...")
 
         try:
-            async with websockets.connect(self.server_url) as ws:
+            async with websockets.connect(
+                self.server_url,
+                ping_interval=20,  # websockets 라이브러리 자체 ping
+                ping_timeout=30
+            ) as ws:
                 self.ws = ws
                 logger.info("서버 연결 성공!")
 
@@ -105,21 +132,25 @@ class VibeAgent:
                 print("  종료: Ctrl+C")
                 print("=" * 50 + "\n")
 
-                # 메시지 수신 대기
-                async for message in ws:
-                    await self.handle_message(message)
+                # ping 루프 시작
+                ping_task = asyncio.create_task(self.ping_loop())
 
-        except websockets.exceptions.ConnectionClosed:
-            logger.warning("서버 연결이 닫혔습니다.")
+                try:
+                    # 메시지 수신 대기
+                    async for message in ws:
+                        await self.handle_message(message)
+                finally:
+                    ping_task.cancel()
+
+        except websockets.exceptions.ConnectionClosed as e:
+            logger.warning(f"서버 연결이 닫혔습니다: {e}")
         except Exception as e:
             logger.error(f"연결 오류: {e}")
             raise
 
     async def handle_message(self, raw_message: str):
         """서버에서 받은 메시지 처리"""
-        import json
         data = json.loads(raw_message)
-
         msg_type = data.get("type")
 
         if msg_type == "query":
@@ -127,18 +158,28 @@ class VibeAgent:
             message = data.get("message", "")
             logger.info(f"쿼리 수신: {message[:50]}...")
 
-            # CLI 실행
-            result = self.run_command(message)
+            self.processing = True
+
+            # CLI 실행 (비동기 - ping 루프가 계속 동작)
+            result = await self.run_command(message)
+
+            self.processing = False
 
             # 결과 전송
-            await self.ws.send(json.dumps({
-                "type": "response",
-                "result": result
-            }))
-            logger.info("응답 전송 완료")
+            if self.ws and not self.ws.closed:
+                await self.ws.send(json.dumps({
+                    "type": "response",
+                    "result": result
+                }))
+                logger.info("응답 전송 완료")
+            else:
+                logger.error("WebSocket이 닫혀서 응답 전송 실패")
 
         elif msg_type == "ping":
             await self.ws.send(json.dumps({"type": "pong"}))
+
+        elif msg_type == "pong":
+            pass  # 서버의 pong 응답
 
         elif msg_type == "error":
             logger.error(f"서버 오류: {data.get('message')}")
