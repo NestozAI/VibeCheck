@@ -14,67 +14,12 @@
 
 ## Choose Your Version
 
-| **☁️ Cloud Version** | **🛠️ Self-Hosted (Open Source)** |
+| **🛠️ Self-Hosted (Open Source)** | **☁️ Cloud Version** |
 | :--- | :--- |
-| ⚡ **No server setup** - just install and go | ✅ **Free** - use your own server |
-| 🔑 One-click Slack OAuth | 💻 Full control over your environment |
-| 📦 `pip install vibecheck-agent` | 🔧 Self-installation & maintenance |
-| [👉 **Get Started**](https://vibecheck-production.up.railway.app) | [👇 **See installation guide below**](#self-hosted-setup) |
-
----
-
-## Cloud Version (Recommended)
-
-The easiest way to use VibeCheck. No Slack app configuration needed!
-
-### Quick Start
-
-#### 1. Install VibeCheck to Slack
-Visit [vibecheck-production.up.railway.app](https://vibecheck-production.up.railway.app) and click **"Add to Slack"**
-
-#### 2. Get Your API Key
-Send any DM to the VibeCheck bot in Slack. You'll receive your API key automatically.
-
-#### 3. Install & Run Agent
-```bash
-pip install vibecheck-agent
-vibecheck-agent --key YOUR_API_KEY --dir /path/to/your/project
-```
-
-That's it! Now send messages to VibeCheck bot in Slack.
-
-### Agent Options
-
-```bash
-vibecheck-agent --key YOUR_API_KEY --dir /path/to/project
-
-Options:
-  --key    Your VibeCheck API key (vibe_sk_...)
-  --dir    Working directory (default: current directory)
-  --server Custom server URL (optional)
-```
-
----
-
-## Demo
-
-![Architecture](./assets/architecture.png)
-
-*System Architecture: Slack ↔ Cloud Server ↔ Local Agent ↔ Claude Code*
-
-![UX Demo](./assets/ux_demo.png)
-
-*Request UI rendering, design changes, and get instant visual feedback - all from Slack.*
-
----
-
-## Features
-
-- **Natural Language Coding** - Chat with Claude Code to write, modify, and execute code
-- **Visual Feedback** - Generate UI screenshots and visualizations, automatically uploaded to Slack
-- **Security Layer** - Path-based access control with approval system
-- **Session Continuity** - Conversations persist across messages
-- **Screenshot Generation** - Automatic HTML/project preview screenshots
+| ✅ **Free** - use your own server | ⚡ **No server setup** - just install and go |
+| 💻 Full control over your environment | 🔑 One-click Slack OAuth |
+| 🔧 Self-installation & maintenance | 📦 `pip install vibecheck-agent` |
+| [👇 **See installation guide below**](#self-hosted-setup) | [👉 **Get Started**](https://vibecheck.nestoz.co) |
 
 ---
 
@@ -172,6 +117,61 @@ WORK_DIR=/path/to/your/project
 ```
 
 </details>
+
+---
+
+## Cloud Version
+
+The easiest way to use VibeCheck. No Slack app configuration needed!
+
+### Quick Start
+
+#### 1. Install VibeCheck to Slack
+Visit [vibecheck.nestoz.co](https://vibecheck.nestoz.co) and click **"Add to Slack"**
+
+#### 2. Get Your API Key
+Send any DM to the VibeCheck bot in Slack. You'll receive your API key automatically.
+
+#### 3. Install & Run Agent
+```bash
+pip install vibecheck-agent
+vibecheck-agent --key YOUR_API_KEY --dir /path/to/your/project
+```
+
+That's it! Now send messages to VibeCheck bot in Slack.
+
+### Agent Options
+
+```bash
+vibecheck-agent --key YOUR_API_KEY --dir /path/to/project
+
+Options:
+  --key    Your VibeCheck API key (vibe_sk_...)
+  --dir    Working directory (default: current directory)
+  --server Custom server URL (optional)
+```
+
+---
+
+## Demo
+
+![Architecture](./assets/architecture.png)
+
+*System Architecture: Slack ↔ Cloud Server ↔ Local Agent ↔ Claude Code*
+
+![UX Demo](./assets/ux_demo.png)
+
+*Request UI rendering, design changes, and get instant visual feedback - all from Slack.*
+
+---
+
+## Features
+
+- **Natural Language Coding** - Chat with Claude Code to write, modify, and execute code
+- **Visual Feedback** - Generate UI screenshots and visualizations, automatically uploaded to Slack
+- **Security Layer** - Path-based access control with approval system
+- **Session Continuity** - Conversations persist across messages
+- **Screenshot Generation** - Automatic HTML/project preview screenshots
 
 ---
 
@@ -294,7 +294,7 @@ Contributions are welcome! Please open an issue or submit a pull request.
 ---
 
 <p align="center">
-  <a href="https://vibecheck-production.up.railway.app">
+  <a href="https://vibecheck.nestoz.co">
     <img src="https://img.shields.io/badge/Try_VibeCheck_Cloud-00ff00?style=for-the-badge&logo=slack&logoColor=black" alt="Try VibeCheck Cloud">
   </a>
 </p>

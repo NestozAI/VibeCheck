@@ -14,67 +14,12 @@
 
 ## 버전 선택
 
-| **☁️ 클라우드 버전** | **🛠️ 셀프 호스팅 (오픈소스)** |
+| **🛠️ 셀프 호스팅 (오픈소스)** | **☁️ 클라우드 버전** |
 | :--- | :--- |
-| ⚡ **서버 설정 불필요** - 설치만 하면 끝 | ✅ **무료** - 자체 서버 사용 |
-| 🔑 원클릭 Slack OAuth | 💻 환경 완전 제어 |
-| 📦 `pip install vibecheck-agent` | 🔧 직접 설치 및 유지보수 |
-| [👉 **시작하기**](https://vibecheck-production.up.railway.app) | [👇 **아래 설치 가이드 참조**](#셀프-호스팅-설정) |
-
----
-
-## 클라우드 버전 (권장)
-
-VibeCheck을 사용하는 가장 쉬운 방법. Slack 앱 설정이 필요 없습니다!
-
-### 빠른 시작
-
-#### 1. Slack에 VibeCheck 설치
-[vibecheck-production.up.railway.app](https://vibecheck-production.up.railway.app) 방문 후 **"Slack에 추가하기"** 클릭
-
-#### 2. API Key 받기
-Slack에서 VibeCheck 봇에게 아무 DM이나 보내세요. API 키가 자동으로 발급됩니다.
-
-#### 3. Agent 설치 및 실행
-```bash
-pip install vibecheck-agent
-vibecheck-agent --key YOUR_API_KEY --dir /path/to/your/project
-```
-
-끝! 이제 Slack에서 VibeCheck 봇에게 메시지를 보내세요.
-
-### Agent 옵션
-
-```bash
-vibecheck-agent --key YOUR_API_KEY --dir /path/to/project
-
-옵션:
-  --key    VibeCheck API 키 (vibe_sk_...)
-  --dir    작업 디렉토리 (기본값: 현재 디렉토리)
-  --server 커스텀 서버 URL (선택사항)
-```
-
----
-
-## 데모
-
-![Architecture](./assets/architecture.png)
-
-*시스템 아키텍처: Slack ↔ 클라우드 서버 ↔ 로컬 Agent ↔ Claude Code*
-
-![UX Demo](./assets/ux_demo.png)
-
-*UI 렌더링, 디자인 수정을 요청하고 즉각적인 시각적 피드백을 받으세요 - 모두 Slack에서.*
-
----
-
-## 주요 기능
-
-- **자연어 코딩** - Claude Code와 대화하며 코드 작성, 수정, 실행
-- **시각적 피드백** - UI 스크린샷과 시각화를 생성하고 Slack에 자동 업로드
-- **보안 레이어** - 경로 기반 접근 제어 및 승인 시스템
-- **세션 유지** - 대화가 메시지 간에 이어짐
-- **스크린샷 생성** - HTML/프로젝트 미리보기 자동 스크린샷
+| ✅ **무료** - 자체 서버 사용 | ⚡ **서버 설정 불필요** - 설치만 하면 끝 |
+| 💻 환경 완전 제어 | 🔑 원클릭 Slack OAuth |
+| 🔧 직접 설치 및 유지보수 | 📦 `pip install vibecheck-agent` |
+| [👇 **아래 설치 가이드 참조**](#셀프-호스팅-설정) | [👉 **시작하기**](https://vibecheck.nestoz.co) |
 
 ---
 
@@ -172,6 +117,61 @@ WORK_DIR=/path/to/your/project
 ```
 
 </details>
+
+---
+
+## 클라우드 버전
+
+VibeCheck을 사용하는 가장 쉬운 방법. Slack 앱 설정이 필요 없습니다!
+
+### 빠른 시작
+
+#### 1. Slack에 VibeCheck 설치
+[vibecheck.nestoz.co](https://vibecheck.nestoz.co) 방문 후 **"Slack에 추가하기"** 클릭
+
+#### 2. API Key 받기
+Slack에서 VibeCheck 봇에게 아무 DM이나 보내세요. API 키가 자동으로 발급됩니다.
+
+#### 3. Agent 설치 및 실행
+```bash
+pip install vibecheck-agent
+vibecheck-agent --key YOUR_API_KEY --dir /path/to/your/project
+```
+
+끝! 이제 Slack에서 VibeCheck 봇에게 메시지를 보내세요.
+
+### Agent 옵션
+
+```bash
+vibecheck-agent --key YOUR_API_KEY --dir /path/to/project
+
+옵션:
+  --key    VibeCheck API 키 (vibe_sk_...)
+  --dir    작업 디렉토리 (기본값: 현재 디렉토리)
+  --server 커스텀 서버 URL (선택사항)
+```
+
+---
+
+## 데모
+
+![Architecture](./assets/architecture.png)
+
+*시스템 아키텍처: Slack ↔ 클라우드 서버 ↔ 로컬 Agent ↔ Claude Code*
+
+![UX Demo](./assets/ux_demo.png)
+
+*UI 렌더링, 디자인 수정을 요청하고 즉각적인 시각적 피드백을 받으세요 - 모두 Slack에서.*
+
+---
+
+## 주요 기능
+
+- **자연어 코딩** - Claude Code와 대화하며 코드 작성, 수정, 실행
+- **시각적 피드백** - UI 스크린샷과 시각화를 생성하고 Slack에 자동 업로드
+- **보안 레이어** - 경로 기반 접근 제어 및 승인 시스템
+- **세션 유지** - 대화가 메시지 간에 이어짐
+- **스크린샷 생성** - HTML/프로젝트 미리보기 자동 스크린샷
 
 ---
 
@@ -294,7 +294,7 @@ MIT
 ---
 
 <p align="center">
-  <a href="https://vibecheck-production.up.railway.app">
+  <a href="https://vibecheck.nestoz.co">
     <img src="https://img.shields.io/badge/VibeCheck_Cloud_시작하기-00ff00?style=for-the-badge&logo=slack&logoColor=black" alt="VibeCheck Cloud 시작하기">
   </a>
 </p>
