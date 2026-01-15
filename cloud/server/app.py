@@ -351,6 +351,48 @@ app = FastAPI(title="VibeCheck Cloud", lifespan=lifespan)
 
 
 # =============================================================================
+# DB 상태 확인 (디버깅용)
+# =============================================================================
+
+@app.get("/debug/db")
+async def debug_db():
+    """DB 상태 확인"""
+    from models import DATABASE_URL, engine
+    import re
+
+    # 비밀번호 마스킹
+    masked_url = DATABASE_URL
+    if "@" in masked_url:
+        masked_url = re.sub(r'://([^:]+):([^@]+)@', r'://\1:****@', masked_url)
+
+    db = SessionLocal()
+    try:
+        # 테이블 목록 조회
+        if DATABASE_URL.startswith("postgresql"):
+            result = db.execute("SELECT tablename FROM pg_tables WHERE schemaname = 'public'")
+            tables = [row[0] for row in result]
+        else:
+            result = db.execute("SELECT name FROM sqlite_master WHERE type='table'")
+            tables = [row[0] for row in result]
+
+        # 각 테이블의 row 수
+        counts = {}
+        for table in tables:
+            result = db.execute(f"SELECT COUNT(*) FROM {table}")
+            counts[table] = result.scalar()
+
+        return {
+            "database_url": masked_url,
+            "tables": tables,
+            "row_counts": counts
+        }
+    except Exception as e:
+        return {"error": str(e), "database_url": masked_url}
+    finally:
+        db.close()
+
+
+# =============================================================================
 # 메인 페이지
 # =============================================================================
 
