@@ -1,0 +1,2 @@
+[console_scripts]
+vibecheck-agent = agent:cli_main

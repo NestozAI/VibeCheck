@@ -1678,21 +1678,42 @@ async def agent_websocket(websocket: WebSocket, key: str):
                 if data.get("type") == "response":
                     # Agent 응답 -> Slack으로 전달
                     response_text = data.get("result", "")
-                    pending = pending_responses.get(key)
+                    pending = pending_responses.pop(key, None)  # pop으로 가져오면서 삭제
+
+                    logger.info(f"Agent 응답 수신: key={key[:20]}..., pending={pending is not None}, text_len={len(response_text)}")
 
                     if pending and response_text:
                         team_id, channel, message_ts = pending
                         client = get_slack_client(team_id)
+                        logger.info(f"Slack 클라이언트: team={team_id}, client={client is not None}")
+
                         if client:
-                            # Block Kit으로 응답 전송 (처리 중 메시지 업데이트)
-                            response_blocks = build_response_blocks(response_text)
-                            await client.chat_update(
-                                channel=channel,
-                                ts=message_ts,
-                                text=response_text[:500],
-                                blocks=response_blocks
-                            )
-                            logger.info(f"Slack으로 응답 전송: {response_text[:50]}...")
+                            try:
+                                # Block Kit으로 응답 전송 (처리 중 메시지 업데이트)
+                                response_blocks = build_response_blocks(response_text)
+                                await client.chat_update(
+                                    channel=channel,
+                                    ts=message_ts,
+                                    text=response_text[:500],
+                                    blocks=response_blocks
+                                )
+                                logger.info(f"Slack으로 응답 전송 성공: {response_text[:50]}...")
+                            except Exception as slack_err:
+                                logger.error(f"Slack 메시지 업데이트 실패: {slack_err}")
+                                # 업데이트 실패 시 새 메시지로 전송 시도
+                                try:
+                                    await client.chat_postMessage(
+                                        channel=channel,
+                                        text=response_text[:3000],
+                                        blocks=response_blocks
+                                    )
+                                    logger.info("새 메시지로 응답 전송 성공")
+                                except Exception as e2:
+                                    logger.error(f"새 메시지 전송도 실패: {e2}")
+                    elif not pending:
+                        logger.warning(f"pending_responses에 키가 없음: {key[:20]}...")
+                    elif not response_text:
+                        logger.warning("응답 텍스트가 비어있음")
 
                 elif data.get("type") == "ping":
                     await websocket.send_json({"type": "pong"})
