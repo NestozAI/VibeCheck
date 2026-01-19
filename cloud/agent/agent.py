@@ -694,6 +694,16 @@ class VibeTerminalAgent:
                 response = await ws.recv()
                 logger.info(f"서버 응답: {response}")
 
+                # 에러 체크
+                try:
+                    resp_data = json.loads(response)
+                    if resp_data.get("type") == "error":
+                        logger.error(f"서버 에러: {resp_data.get('message')}")
+                        print(f"\n❌ 연결 실패: {resp_data.get('message')}")
+                        raise SystemExit(1)  # 인증 실패 시 종료
+                except json.JSONDecodeError:
+                    pass  # JSON이 아니면 무시
+
                 # Claude Code 시작
                 self.spawn_claude()
                 logger.info("Claude Code 시작됨")
