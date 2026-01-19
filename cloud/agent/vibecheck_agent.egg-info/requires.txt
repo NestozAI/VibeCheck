@@ -1,1 +1,4 @@
 websockets>=12.0
+
+[screenshot]
+playwright>=1.40.0

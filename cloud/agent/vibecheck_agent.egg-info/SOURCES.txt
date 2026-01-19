@@ -1,5 +1,6 @@
 README.md
 agent.py
+html_screenshot.py
 pyproject.toml
 vibecheck_agent.egg-info/PKG-INFO
 vibecheck_agent.egg-info/SOURCES.txt

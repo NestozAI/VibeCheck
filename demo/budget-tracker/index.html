@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>가계부 - 2025년 1월</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f5f7fa;
+            color: #333;
+            line-height: 1.6;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 24px;
+        }
+
+        /* Header */
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 32px;
+        }
+        .header h1 {
+            font-size: 1.8rem;
+            color: #1a1a2e;
+        }
+        .header .month-nav {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+        .month-nav button {
+            background: #fff;
+            border: 1px solid #ddd;
+            padding: 8px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1rem;
+            transition: all 0.2s;
+        }
+        .month-nav button:hover {
+            background: #4361ee;
+            color: #fff;
+            border-color: #4361ee;
+        }
+        .month-nav .current-month {
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: #1a1a2e;
+        }
+
+        /* Summary Cards */
+        .summary {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
+            margin-bottom: 32px;
+        }
+        .card {
+            background: #fff;
+            border-radius: 16px;
+            padding: 24px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+        }
+        .card.income {
+            border-left: 4px solid #10b981;
+        }
+        .card.expense {
+            border-left: 4px solid #ef4444;
+        }
+        .card.balance {
+            border-left: 4px solid #4361ee;
+        }
+        .card-label {
+            font-size: 0.9rem;
+            color: #666;
+            margin-bottom: 8px;
+        }
+        .card-value {
+            font-size: 1.8rem;
+            font-weight: 700;
+        }
+        .card.income .card-value { color: #10b981; }
+        .card.expense .card-value { color: #ef4444; }
+        .card.balance .card-value { color: #4361ee; }
+
+        /* Charts Section */
+        .charts {
+            display: grid;
+            grid-template-columns: 1fr 1.5fr;
+            gap: 24px;
+            margin-bottom: 32px;
+        }
+        .chart-card {
+            background: #fff;
+            border-radius: 16px;
+            padding: 24px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+        }
+        .chart-card h2 {
+            font-size: 1.1rem;
+            color: #1a1a2e;
+            margin-bottom: 20px;
+        }
+        .pie-container {
+            position: relative;
+            height: 280px;
+            display: flex;
+            justify-content: center;
+        }
+        .bar-container {
+            height: 280px;
+        }
+
+        /* Transaction List */
+        .transactions {
+            background: #fff;
+            border-radius: 16px;
+            padding: 24px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+        }
+        .transactions h2 {
+            font-size: 1.1rem;
+            color: #1a1a2e;
+            margin-bottom: 20px;
+        }
+        .transaction-list {
+            list-style: none;
+        }
+        .transaction-item {
+            display: flex;
+            align-items: center;
+            padding: 16px 0;
+            border-bottom: 1px solid #f0f0f0;
+        }
+        .transaction-item:last-child {
+            border-bottom: none;
+        }
+        .transaction-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.4rem;
+            margin-right: 16px;
+        }
+        .transaction-icon.food { background: #fef3c7; }
+        .transaction-icon.transport { background: #dbeafe; }
+        .transaction-icon.shopping { background: #fce7f3; }
+        .transaction-icon.entertainment { background: #e0e7ff; }
+        .transaction-icon.bill { background: #fee2e2; }
+        .transaction-icon.income { background: #d1fae5; }
+        .transaction-info {
+            flex: 1;
+        }
+        .transaction-title {
+            font-weight: 600;
+            color: #1a1a2e;
+        }
+        .transaction-category {
+            font-size: 0.85rem;
+            color: #888;
+        }
+        .transaction-amount {
+            font-weight: 700;
+            font-size: 1.1rem;
+        }
+        .transaction-amount.expense { color: #ef4444; }
+        .transaction-amount.income { color: #10b981; }
+        .transaction-date {
+            font-size: 0.85rem;
+            color: #888;
+            margin-left: 16px;
+            text-align: right;
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .summary {
+                grid-template-columns: 1fr;
+            }
+            .charts {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <h1>💰 내 가계부</h1>
+            <div class="month-nav">
+                <button>◀ 이전</button>
+                <span class="current-month">2025년 1월</span>
+                <button>다음 ▶</button>
+            </div>
+        </div>
+
+        <!-- Summary Cards -->
+        <div class="summary">
+            <div class="card income">
+                <div class="card-label">이번 달 수입</div>
+                <div class="card-value">+3,500,000원</div>
+            </div>
+            <div class="card expense">
+                <div class="card-label">이번 달 지출</div>
+                <div class="card-value">-1,847,000원</div>
+            </div>
+            <div class="card balance">
+                <div class="card-label">잔액</div>
+                <div class="card-value">1,653,000원</div>
+            </div>
+        </div>
+
+        <!-- Charts -->
+        <div class="charts">
+            <!-- Pie Chart: Category -->
+            <div class="chart-card">
+                <h2>📊 카테고리별 지출</h2>
+                <div class="pie-container">
+                    <canvas id="pieChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Bar Chart: Daily -->
+            <div class="chart-card">
+                <h2>📈 일별 지출</h2>
+                <div class="bar-container">
+                    <canvas id="barChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Transactions -->
+        <div class="transactions">
+            <h2>📝 최근 거래 내역</h2>
+            <ul class="transaction-list">
+                <li class="transaction-item">
+                    <div class="transaction-icon food">🍔</div>
+                    <div class="transaction-info">
+                        <div class="transaction-title">배달의민족</div>
+                        <div class="transaction-category">식비</div>
+                    </div>
+                    <div class="transaction-amount expense">-32,000원</div>
+                    <div class="transaction-date">오늘<br>12:30</div>
+                </li>
+                <li class="transaction-item">
+                    <div class="transaction-icon transport">🚇</div>
+                    <div class="transaction-info">
+                        <div class="transaction-title">교통카드 충전</div>
+                        <div class="transaction-category">교통</div>
+                    </div>
+                    <div class="transaction-amount expense">-50,000원</div>
+                    <div class="transaction-date">오늘<br>09:15</div>
+                </li>
+                <li class="transaction-item">
+                    <div class="transaction-icon shopping">🛍️</div>
+                    <div class="transaction-info">
+                        <div class="transaction-title">쿠팡</div>
+                        <div class="transaction-category">쇼핑</div>
+                    </div>
+                    <div class="transaction-amount expense">-89,000원</div>
+                    <div class="transaction-date">어제<br>21:45</div>
+                </li>
+                <li class="transaction-item">
+                    <div class="transaction-icon income">💵</div>
+                    <div class="transaction-info">
+                        <div class="transaction-title">월급</div>
+                        <div class="transaction-category">급여</div>
+                    </div>
+                    <div class="transaction-amount income">+3,500,000원</div>
+                    <div class="transaction-date">1월 10일<br>09:00</div>
+                </li>
+                <li class="transaction-item">
+                    <div class="transaction-icon entertainment">🎬</div>
+                    <div class="transaction-info">
+                        <div class="transaction-title">넷플릭스</div>
+                        <div class="transaction-category">구독</div>
+                    </div>
+                    <div class="transaction-amount expense">-17,000원</div>
+                    <div class="transaction-date">1월 9일<br>00:00</div>
+                </li>
+                <li class="transaction-item">
+                    <div class="transaction-icon bill">🏠</div>
+                    <div class="transaction-info">
+                        <div class="transaction-title">월세</div>
+                        <div class="transaction-category">주거</div>
+                    </div>
+                    <div class="transaction-amount expense">-700,000원</div>
+                    <div class="transaction-date">1월 5일<br>10:00</div>
+                </li>
+                <li class="transaction-item">
+                    <div class="transaction-icon food">☕</div>
+                    <div class="transaction-info">
+                        <div class="transaction-title">스타벅스</div>
+                        <div class="transaction-category">식비</div>
+                    </div>
+                    <div class="transaction-amount expense">-6,500원</div>
+                    <div class="transaction-date">1월 4일<br>14:20</div>
+                </li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        // Pie Chart - 카테고리별 지출
+        const pieCtx = document.getElementById('pieChart').getContext('2d');
+        new Chart(pieCtx, {
+            type: 'doughnut',
+            data: {
+                labels: ['식비', '주거', '교통', '쇼핑', '구독/문화', '기타'],
+                datasets: [{
+                    data: [450000, 700000, 150000, 320000, 127000, 100000],
+                    backgroundColor: [
+                        '#f59e0b',
+                        '#ef4444',
+                        '#3b82f6',
+                        '#ec4899',
+                        '#8b5cf6',
+                        '#6b7280'
+                    ],
+                    borderWidth: 0,
+                    hoverOffset: 10
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                        labels: {
+                            padding: 16,
+                            usePointStyle: true,
+                            font: { size: 12 }
+                        }
+                    }
+                },
+                cutout: '60%'
+            }
+        });
+
+        // Bar Chart - 일별 지출
+        const barCtx = document.getElementById('barChart').getContext('2d');
+        new Chart(barCtx, {
+            type: 'bar',
+            data: {
+                labels: ['1일', '2일', '3일', '4일', '5일', '6일', '7일', '8일', '9일', '10일', '11일', '12일', '13일', '14일', '15일'],
+                datasets: [{
+                    label: '지출',
+                    data: [45000, 23000, 0, 6500, 700000, 12000, 35000, 0, 17000, 89000, 0, 32000, 50000, 0, 0],
+                    backgroundColor: '#4361ee',
+                    borderRadius: 6,
+                    barThickness: 20
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        display: false
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        grid: {
+                            color: '#f0f0f0'
+                        },
+                        ticks: {
+                            callback: function(value) {
+                                if (value >= 10000) {
+                                    return (value / 10000) + '만';
+                                }
+                                return value;
+                            }
+                        }
+                    },
+                    x: {
+                        grid: {
+                            display: false
+                        }
+                    }
+                }
+            }
+        });
+    </script>
+</body>
+</html>

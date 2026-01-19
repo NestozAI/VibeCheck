@@ -1,1 +1,2 @@
 agent
+html_screenshot

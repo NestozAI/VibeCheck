@@ -1,6 +1,6 @@
 Metadata-Version: 2.4
 Name: vibecheck-agent
-Version: 0.1.5
+Version: 0.1.7
 Summary: Slack에서 Claude Code를 원격 제어하는 Agent
 Author-email: VibeCheck <hello@vibecheck.dev>
 License: MIT
@@ -17,6 +17,8 @@ Classifier: Programming Language :: Python :: 3.12
 Requires-Python: >=3.9
 Description-Content-Type: text/markdown
 Requires-Dist: websockets>=12.0
+Provides-Extra: screenshot
+Requires-Dist: playwright>=1.40.0; extra == "screenshot"
 
 # VibeCheck Agent
 
