@@ -50,6 +50,9 @@ logger = logging.getLogger(__name__)
 # Railway 배포 URL
 DEFAULT_SERVER = "wss://vibecheck.nestoz.co/ws/agent"
 
+# 세션 파일 저장 디렉토리
+SESSION_DIR = os.path.expanduser("~/.vibecheck")
+
 # CLI 실행을 위한 스레드풀
 executor = ThreadPoolExecutor(max_workers=1)
 
@@ -145,10 +148,66 @@ def is_safe_system_command(message: str) -> bool:
     return False
 
 
+# =============================================================================
+# 세션 ID 관리
+# =============================================================================
+
+def get_session_file_path(work_dir: str) -> str:
+    """작업 디렉토리에 대한 세션 파일 경로 반환"""
+    # 디렉토리 경로를 해시하여 고유한 파일명 생성
+    import hashlib
+    dir_hash = hashlib.md5(work_dir.encode()).hexdigest()[:12]
+    return os.path.join(SESSION_DIR, f"session_{dir_hash}.json")
+
+
+def save_session_id(work_dir: str, session_id: str):
+    """세션 ID 저장"""
+    os.makedirs(SESSION_DIR, exist_ok=True)
+    session_file = get_session_file_path(work_dir)
+    data = {
+        "work_dir": work_dir,
+        "session_id": session_id,
+        "updated_at": str(os.popen("date -Iseconds").read().strip())
+    }
+    try:
+        with open(session_file, 'w') as f:
+            json.dump(data, f)
+        logger.info(f"세션 ID 저장: {session_id[:20]}...")
+    except Exception as e:
+        logger.warning(f"세션 ID 저장 실패: {e}")
+
+
+def load_session_id(work_dir: str) -> Optional[str]:
+    """저장된 세션 ID 로드"""
+    session_file = get_session_file_path(work_dir)
+    if os.path.exists(session_file):
+        try:
+            with open(session_file, 'r') as f:
+                data = json.load(f)
+                session_id = data.get("session_id")
+                if session_id:
+                    logger.info(f"이전 세션 ID 로드: {session_id[:20]}...")
+                    return session_id
+        except Exception as e:
+            logger.warning(f"세션 ID 로드 실패: {e}")
+    return None
+
+
+def clear_session_id(work_dir: str):
+    """세션 ID 삭제 (새 세션 시작 시)"""
+    session_file = get_session_file_path(work_dir)
+    if os.path.exists(session_file):
+        try:
+            os.remove(session_file)
+            logger.info("이전 세션 ID 삭제됨")
+        except Exception as e:
+            logger.warning(f"세션 ID 삭제 실패: {e}")
+
+
 class VibeAgent:
     """VibeCheck Agent"""
 
-    def __init__(self, api_key: str, work_dir: str, server_url: str = DEFAULT_SERVER):
+    def __init__(self, api_key: str, work_dir: str, server_url: str = DEFAULT_SERVER, new_session: bool = False):
         self.api_key = api_key
         self.work_dir = work_dir
         self.server_url = f"{server_url}?key={api_key}"
@@ -164,6 +223,13 @@ class VibeAgent:
 
         # 최근 작업한 프로젝트 경로 저장 (스크린샷 등에 사용)
         self.last_project_path: Optional[str] = None
+
+        # 세션 ID 관리
+        self.session_id: Optional[str] = None
+        if new_session:
+            clear_session_id(work_dir)
+        else:
+            self.session_id = load_session_id(work_dir)
 
     def is_path_trusted(self, path: str) -> bool:
         """경로가 신뢰할 수 있는지 확인"""
@@ -197,7 +263,10 @@ class VibeAgent:
             "--dangerously-skip-permissions",
         ]
 
-        if self.session_started:
+        # 세션 이어가기: 저장된 세션 ID가 있으면 --resume, 아니면 --continue
+        if self.session_id:
+            cmd.extend(["--resume", self.session_id])
+        elif self.session_started:
             cmd.append("--continue")
 
         cmd.append(message)
@@ -225,7 +294,19 @@ class VibeAgent:
                 logger.error(f"CLI 실패: returncode={result.returncode}, stderr={result.stderr[:200] if result.stderr else 'None'}, stdout={result.stdout[:200] if result.stdout else 'None'}")
                 # stderr가 없으면 stdout에 에러 메시지가 있을 수 있음
                 error_msg = result.stderr or result.stdout or '알 수 없는 오류'
+
+                # 세션 ID가 유효하지 않으면 새 세션 시작
+                if self.session_id and ("session" in error_msg.lower() or "not found" in error_msg.lower()):
+                    logger.warning("세션 ID가 유효하지 않음. 새 세션으로 재시도...")
+                    self.session_id = None
+                    clear_session_id(self.work_dir)
+                    return self.run_command_sync(message)
+
                 return f"오류: {error_msg}"
+
+            # 첫 실행 후 세션 ID 추출 및 저장
+            if not self.session_id:
+                self._extract_and_save_session_id()
 
             logger.info(f"응답 ({len(output)}자): {output[:100]}...")
             return output
@@ -235,6 +316,29 @@ class VibeAgent:
         except Exception as e:
             logger.error(f"실행 오류: {e}")
             return f"실행 오류: {str(e)}"
+
+    def _extract_and_save_session_id(self):
+        """Claude Code의 최근 세션 ID 추출 및 저장"""
+        try:
+            # claude sessions list --json 으로 세션 목록 가져오기
+            result = subprocess.run(
+                ["claude", "sessions", "list", "--json"],
+                cwd=self.work_dir,
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                sessions = json.loads(result.stdout)
+                if sessions and len(sessions) > 0:
+                    # 가장 최근 세션 (첫 번째)
+                    latest = sessions[0]
+                    session_id = latest.get("id") or latest.get("session_id")
+                    if session_id:
+                        self.session_id = session_id
+                        save_session_id(self.work_dir, session_id)
+        except Exception as e:
+            logger.debug(f"세션 ID 추출 실패 (무시): {e}")
 
     async def run_command(self, message: str) -> str:
         """CLI 명령 실행 (비동기 래퍼)"""
@@ -593,6 +697,7 @@ async def main():
     parser.add_argument("--key", "-k", required=True, help="API Key")
     parser.add_argument("--dir", "-d", default=os.getcwd(), help="작업 디렉토리")
     parser.add_argument("--server", "-s", default=DEFAULT_SERVER, help="서버 URL")
+    parser.add_argument("--new-session", "-n", action="store_true", help="새 세션 시작 (이전 세션 무시)")
 
     args = parser.parse_args()
 
@@ -604,7 +709,8 @@ async def main():
     agent = VibeAgent(
         api_key=args.key,
         work_dir=args.dir,
-        server_url=args.server
+        server_url=args.server,
+        new_session=args.new_session
     )
 
     # 재연결 로직
