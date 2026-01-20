@@ -1,6 +1,6 @@
 # VibeCheck
 
-> **Slack에서 Claude Code를 원격 제어하세요.**
+> **어디서든 Claude Code를 원격 제어하세요.**
 
 [![English](https://img.shields.io/badge/Language-English-blue)](./README.md)
 [![Korean](https://img.shields.io/badge/Language-한국어-red)](./README_kr.md)
@@ -8,7 +8,7 @@
 [![Python](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/)
 [![PyPI](https://img.shields.io/pypi/v/vibecheck-agent?color=green)](https://pypi.org/project/vibecheck-agent/)
 
-**VibeCheck**은 서버에서 실행 중인 Claude Code CLI를 Slack DM으로 제어할 수 있게 해줍니다. 집, 카페, 이동 중 어디서든 코드를 작성하고 수정할 수 있습니다.
+**VibeCheck**은 서버에서 실행 중인 Claude Code CLI를 웹 브라우저로 제어할 수 있게 해줍니다. 집, 카페, 이동 중 어디서든 코드를 작성하고 수정할 수 있습니다.
 
 ---
 
@@ -17,7 +17,7 @@
 | **🛠️ 셀프 호스팅 (오픈소스)** | **☁️ 클라우드 버전** |
 | :--- | :--- |
 | ✅ **무료** - 자체 서버 사용 | ⚡ **서버 설정 불필요** - 설치만 하면 끝 |
-| 💻 환경 완전 제어 | 🔑 원클릭 Slack OAuth |
+| 💻 환경 완전 제어 | 🌐 웹 기반 채팅 인터페이스 |
 | 🔧 직접 설치 및 유지보수 | 📦 `pip install vibecheck-agent` |
 | [👇 **아래 설치 가이드 참조**](#셀프-호스팅-설정) | [👉 **시작하기**](https://vibecheck.nestoz.co) |
 
@@ -122,15 +122,15 @@ WORK_DIR=/path/to/your/project
 
 ## 클라우드 버전
 
-VibeCheck을 사용하는 가장 쉬운 방법. Slack 앱 설정이 필요 없습니다!
+VibeCheck을 사용하는 가장 쉬운 방법. 서버 설정이 필요 없습니다!
 
 ### 빠른 시작
 
-#### 1. Slack에 VibeCheck 설치
-[vibecheck.nestoz.co](https://vibecheck.nestoz.co) 방문 후 **"Slack에 추가하기"** 클릭
+#### 1. 로그인
+[vibecheck.nestoz.co](https://vibecheck.nestoz.co) 방문 후 이메일로 로그인하세요.
 
 #### 2. API Key 받기
-Slack에서 VibeCheck 봇에게 아무 DM이나 보내세요. API 키가 자동으로 발급됩니다.
+대시보드에서 API 키를 복사하세요.
 
 #### 3. Agent 설치 및 실행
 ```bash
@@ -138,7 +138,7 @@ pip install vibecheck-agent
 vibecheck-agent --key YOUR_API_KEY --dir /path/to/your/project
 ```
 
-끝! 이제 Slack에서 VibeCheck 봇에게 메시지를 보내세요.
+끝! 이제 Chat 페이지를 열고 코딩을 시작하세요.
 
 ### Agent 옵션
 
@@ -157,18 +157,19 @@ vibecheck-agent --key YOUR_API_KEY --dir /path/to/project
 
 ![Architecture](./assets/architecture.png)
 
-*시스템 아키텍처: Slack ↔ 클라우드 서버 ↔ 로컬 Agent ↔ Claude Code*
+*시스템 아키텍처: 웹 브라우저 ↔ 클라우드 서버 ↔ 로컬 Agent ↔ Claude Code*
 
 ![UX Demo](./assets/ux_demo.png)
 
-*UI 렌더링, 디자인 수정을 요청하고 즉각적인 시각적 피드백을 받으세요 - 모두 Slack에서.*
+*UI 렌더링, 디자인 수정을 요청하고 즉각적인 시각적 피드백을 받으세요 - 모두 웹에서.*
 
 ---
 
 ## 주요 기능
 
 - **자연어 코딩** - Claude Code와 대화하며 코드 작성, 수정, 실행
-- **시각적 피드백** - UI 스크린샷과 시각화를 생성하고 Slack에 자동 업로드
+- **시각적 피드백** - UI 스크린샷과 시각화를 생성하고 웹 채팅에 표시
+- **이미지 업로드** - 드래그 앤 드롭으로 채팅에 직접 이미지 업로드
 - **보안 레이어** - 경로 기반 접근 제어 및 승인 시스템
 - **세션 유지** - 대화가 메시지 간에 이어짐
 - **스크린샷 생성** - HTML/프로젝트 미리보기 자동 스크린샷
@@ -239,7 +240,7 @@ ls, pwd, date, which, echo
 
 - Python 3.8+
 - Claude Code CLI (`claude` 명령어)
-- Slack 워크스페이스
+- 웹 브라우저 (클라우드 버전) 또는 Slack 워크스페이스 (셀프 호스팅)
 
 ---
 
@@ -271,12 +272,9 @@ VibeCheck/
 - `claude` CLI가 설치되어 접근 가능한지 확인
 - 인터넷 연결 확인
 
-### 봇이 DM에 응답하지 않음
+### 응답이 오지 않음
 - (셀프 호스팅) **Event Subscriptions** → `message.im` 구독 확인
-- (클라우드) Agent가 실행 중인지 확인
-
-### 이미지 업로드 실패
-- (셀프 호스팅) `files:write` 스코프 추가 후 앱 재설치
+- (클라우드) Agent가 실행 중인지 확인하고 Chat 페이지 확인
 
 ### 스크린샷이 생성되지 않음
 - playwright 설치: `pip install playwright && playwright install chromium`
@@ -295,6 +293,6 @@ MIT
 
 <p align="center">
   <a href="https://vibecheck.nestoz.co">
-    <img src="https://img.shields.io/badge/VibeCheck_Cloud_시작하기-00ff00?style=for-the-badge&logo=slack&logoColor=black" alt="VibeCheck Cloud 시작하기">
+    <img src="https://img.shields.io/badge/VibeCheck_Cloud_시작하기-00ff00?style=for-the-badge" alt="VibeCheck Cloud 시작하기">
   </a>
 </p>

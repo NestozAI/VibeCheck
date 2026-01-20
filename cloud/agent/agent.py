@@ -19,11 +19,7 @@ import json
 import re
 import glob
 import base64
-import pty
-import select
-import struct
-import fcntl
-import termios
+# PTY 관련 import 제거됨 (Message 모드로 전환)
 from typing import Optional, Set, List, Dict
 from concurrent.futures import ThreadPoolExecutor
 
@@ -591,164 +587,12 @@ class VibeAgent:
             logger.error("WebSocket이 닫혀서 응답 전송 실패")
 
 
-# =============================================================================
-# PTY 모드 - 터미널 UI 그대로 전송
-# =============================================================================
-
-class VibeTerminalAgent:
-    """PTY 모드 Agent - Claude Code 터미널 UI를 그대로 웹으로 전송"""
-
-    def __init__(self, api_key: str, work_dir: str, server_url: str = DEFAULT_SERVER):
-        self.api_key = api_key
-        self.work_dir = work_dir
-        # 터미널 모드용 엔드포인트
-        self.server_url = f"{server_url.replace('/ws/agent', '/ws/terminal')}?key={api_key}"
-        self.ws: Optional[websockets.WebSocketClientProtocol] = None
-        self.master_fd: Optional[int] = None
-        self.pid: Optional[int] = None
-        self.running = False
-
-    def set_pty_size(self, rows: int, cols: int):
-        """PTY 크기 설정"""
-        if self.master_fd:
-            winsize = struct.pack('HHHH', rows, cols, 0, 0)
-            fcntl.ioctl(self.master_fd, termios.TIOCSWINSZ, winsize)
-
-    def spawn_claude(self):
-        """Claude Code CLI를 PTY에서 실행"""
-        pid, fd = pty.fork()
-
-        if pid == 0:
-            # 자식 프로세스
-            os.chdir(self.work_dir)
-            os.execvp("claude", ["claude"])
-        else:
-            # 부모 프로세스
-            self.pid = pid
-            self.master_fd = fd
-            # 기본 터미널 크기 설정
-            self.set_pty_size(40, 120)
-            return fd
-
-    async def read_pty_output(self):
-        """PTY에서 출력 읽기 및 WebSocket으로 전송"""
-        loop = asyncio.get_event_loop()
-
-        while self.running:
-            try:
-                # select로 읽을 수 있는지 확인
-                r, _, _ = select.select([self.master_fd], [], [], 0.1)
-                if self.master_fd in r:
-                    try:
-                        output = os.read(self.master_fd, 4096)
-                        if output:
-                            # base64로 인코딩해서 전송
-                            await self.ws.send(json.dumps({
-                                "type": "output",
-                                "data": base64.b64encode(output).decode('utf-8')
-                            }))
-                    except OSError:
-                        break
-                else:
-                    await asyncio.sleep(0.01)
-            except Exception as e:
-                logger.error(f"PTY 읽기 오류: {e}")
-                break
-
-    async def handle_message(self, raw_message: str):
-        """서버에서 받은 메시지 처리"""
-        data = json.loads(raw_message)
-        msg_type = data.get("type")
-
-        if msg_type == "input":
-            # 키 입력 전달
-            input_data = base64.b64decode(data.get("data", ""))
-            if self.master_fd and input_data:
-                os.write(self.master_fd, input_data)
-
-        elif msg_type == "resize":
-            # 터미널 크기 변경
-            rows = data.get("rows", 40)
-            cols = data.get("cols", 120)
-            self.set_pty_size(rows, cols)
-
-        elif msg_type == "ping":
-            await self.ws.send(json.dumps({"type": "pong"}))
-
-    async def connect(self):
-        """서버에 연결하고 터미널 세션 시작"""
-        logger.info(f"터미널 모드 서버 연결 중: {self.server_url[:60]}...")
-
-        try:
-            async with websockets.connect(
-                self.server_url,
-                ping_interval=20,
-                ping_timeout=30,
-                max_size=10 * 1024 * 1024  # 10MB
-            ) as ws:
-                self.ws = ws
-                self.running = True
-                logger.info("서버 연결 성공!")
-
-                # 연결 확인 메시지 대기
-                response = await ws.recv()
-                logger.info(f"서버 응답: {response}")
-
-                # 에러 체크
-                try:
-                    resp_data = json.loads(response)
-                    if resp_data.get("type") == "error":
-                        logger.error(f"서버 에러: {resp_data.get('message')}")
-                        print(f"\n❌ 연결 실패: {resp_data.get('message')}")
-                        raise SystemExit(1)  # 인증 실패 시 종료
-                except json.JSONDecodeError:
-                    pass  # JSON이 아니면 무시
-
-                # Claude Code 시작
-                self.spawn_claude()
-                logger.info("Claude Code 시작됨")
-
-                print("\n" + "=" * 50)
-                print("  VibeCheck Terminal Agent 실행 중")
-                print(f"  작업 디렉토리: {self.work_dir}")
-                print("  웹에서 터미널을 사용하세요!")
-                print("  종료: Ctrl+C")
-                print("=" * 50 + "\n")
-
-                # PTY 출력 읽기 태스크 시작
-                output_task = asyncio.create_task(self.read_pty_output())
-
-                try:
-                    # 서버에서 메시지 수신
-                    async for message in ws:
-                        await self.handle_message(message)
-                finally:
-                    self.running = False
-                    output_task.cancel()
-                    # 프로세스 종료
-                    if self.pid:
-                        try:
-                            os.kill(self.pid, 9)
-                        except:
-                            pass
-
-        except websockets.exceptions.ConnectionClosed as e:
-            logger.warning(f"서버 연결이 닫혔습니다: {e}")
-        except Exception as e:
-            logger.error(f"연결 오류: {e}")
-            raise
-        finally:
-            self.running = False
-
-
 async def main():
     """메인 함수"""
     parser = argparse.ArgumentParser(description="VibeCheck Agent")
     parser.add_argument("--key", "-k", required=True, help="API Key")
     parser.add_argument("--dir", "-d", default=os.getcwd(), help="작업 디렉토리")
     parser.add_argument("--server", "-s", default=DEFAULT_SERVER, help="서버 URL")
-    parser.add_argument("--terminal", "-t", action="store_true",
-                        help="터미널 모드 (Claude Code UI 그대로 전송)")
 
     args = parser.parse_args()
 
@@ -757,20 +601,11 @@ async def main():
         print(f"Error: 디렉토리가 존재하지 않습니다: {args.dir}")
         sys.exit(1)
 
-    if args.terminal:
-        # 터미널 모드
-        agent = VibeTerminalAgent(
-            api_key=args.key,
-            work_dir=args.dir,
-            server_url=args.server
-        )
-    else:
-        # 기존 모드
-        agent = VibeAgent(
-            api_key=args.key,
-            work_dir=args.dir,
-            server_url=args.server
-        )
+    agent = VibeAgent(
+        api_key=args.key,
+        work_dir=args.dir,
+        server_url=args.server
+    )
 
     # 재연결 로직
     while True:
