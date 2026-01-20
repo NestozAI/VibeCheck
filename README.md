@@ -129,13 +129,10 @@ The easiest way to use VibeCheck. No server setup needed!
 #### 1. Sign In
 Visit [vibecheck.nestoz.co](https://vibecheck.nestoz.co) and sign in with your email.
 
-#### 2. Get Your API Key
-Copy your API key from the dashboard.
-
-#### 3. Install & Run Agent
+#### 2. Install & Run Agent
+Copy the one-liner curl command from dashboard and run it on your server:
 ```bash
-pip install vibecheck-agent
-vibecheck-agent --key YOUR_API_KEY --dir /path/to/your/project
+curl -sL https://vibecheck.nestoz.co/install/YOUR_API_KEY | bash
 ```
 
 That's it! Now open the Chat page and start coding.
