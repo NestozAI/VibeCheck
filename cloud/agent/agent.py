@@ -318,25 +318,34 @@ class VibeAgent:
             return f"실행 오류: {str(e)}"
 
     def _extract_and_save_session_id(self):
-        """Claude Code의 최근 세션 ID 추출 및 저장"""
+        """Claude Code의 최근 세션 ID 추출 및 저장 (프로젝트 디렉토리에서 직접)"""
         try:
-            # claude sessions list --json 으로 세션 목록 가져오기
-            result = subprocess.run(
-                ["claude", "sessions", "list", "--json"],
-                cwd=self.work_dir,
-                capture_output=True,
-                text=True,
-                timeout=10
-            )
-            if result.returncode == 0 and result.stdout.strip():
-                sessions = json.loads(result.stdout)
-                if sessions and len(sessions) > 0:
-                    # 가장 최근 세션 (첫 번째)
-                    latest = sessions[0]
-                    session_id = latest.get("id") or latest.get("session_id")
-                    if session_id:
-                        self.session_id = session_id
-                        save_session_id(self.work_dir, session_id)
+            # Claude Code 프로젝트 디렉토리 경로 계산
+            # ~/.claude/projects/-disk1-lecture-sotaaz-test-VibeCheck/
+            work_dir_escaped = self.work_dir.replace('/', '-').lstrip('-')
+            claude_project_dir = os.path.expanduser(f"~/.claude/projects/-{work_dir_escaped}")
+
+            if not os.path.isdir(claude_project_dir):
+                logger.debug(f"Claude 프로젝트 디렉토리 없음: {claude_project_dir}")
+                return
+
+            # 가장 최근 수정된 .jsonl 파일 찾기
+            jsonl_files = glob.glob(os.path.join(claude_project_dir, "*.jsonl"))
+            if not jsonl_files:
+                logger.debug("세션 파일 없음")
+                return
+
+            # 수정 시간 기준 정렬
+            latest_file = max(jsonl_files, key=os.path.getmtime)
+            session_id = os.path.basename(latest_file).replace('.jsonl', '')
+
+            # UUID 형식 검증 (간단히)
+            if len(session_id) == 36 and session_id.count('-') == 4:
+                self.session_id = session_id
+                save_session_id(self.work_dir, session_id)
+                logger.info(f"세션 ID 추출 성공: {session_id[:20]}...")
+            else:
+                logger.debug(f"유효하지 않은 세션 ID 형식: {session_id}")
         except Exception as e:
             logger.debug(f"세션 ID 추출 실패 (무시): {e}")
 
