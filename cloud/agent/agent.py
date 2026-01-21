@@ -71,20 +71,40 @@ SAFE_SYSTEM_COMMANDS = {
 # 이미지 감지 유틸리티
 # =============================================================================
 
-def get_images_with_mtime(work_dir: str) -> Dict[str, float]:
-    """작업 디렉토리의 이미지 파일과 수정 시간 반환"""
+def get_images_with_mtime(work_dir: str, max_depth: int = 2) -> Dict[str, float]:
+    """작업 디렉토리의 이미지 파일과 수정 시간 반환 (성능 최적화)"""
     images = {}
-    for ext in IMAGE_EXTENSIONS:
-        for path in glob.glob(os.path.join(work_dir, f'*{ext}')):
-            images[path] = os.path.getmtime(path)
-        for path in glob.glob(os.path.join(work_dir, f'**/*{ext}'), recursive=True):
-            images[path] = os.path.getmtime(path)
+    # 제외할 디렉토리 (성능)
+    SKIP_DIRS = {'node_modules', '.git', '__pycache__', 'venv', '.venv', 'dist', 'build', '.next'}
+
+    try:
+        for root, dirs, files in os.walk(work_dir):
+            # 깊이 제한
+            depth = root[len(work_dir):].count(os.sep)
+            if depth >= max_depth:
+                dirs[:] = []  # 더 이상 하위 탐색 안함
+                continue
+
+            # 제외 디렉토리 스킵
+            dirs[:] = [d for d in dirs if d not in SKIP_DIRS]
+
+            for f in files:
+                ext = os.path.splitext(f)[1].lower()
+                if ext in IMAGE_EXTENSIONS:
+                    path = os.path.join(root, f)
+                    try:
+                        images[path] = os.path.getmtime(path)
+                    except OSError:
+                        pass
+    except Exception as e:
+        logger.warning(f"이미지 스캔 오류: {e}")
+
     return images
 
 
-def find_new_or_modified_images(work_dir: str, before_images: Dict[str, float]) -> List[str]:
+def find_new_or_modified_images(work_dir: str, before_images: Dict[str, float], max_depth: int = 2) -> List[str]:
     """새로 생성되거나 수정된 이미지 파일 찾기"""
-    after_images = get_images_with_mtime(work_dir)
+    after_images = get_images_with_mtime(work_dir, max_depth)
     result = []
     for path, mtime in after_images.items():
         if path not in before_images or mtime > before_images[path]:
@@ -231,6 +251,10 @@ class VibeAgent:
         else:
             self.session_id = load_session_id(work_dir)
 
+        # 현재 실행 중인 프로세스 (인터럽트용)
+        self.current_process: Optional[subprocess.Popen] = None
+        self.process_interrupted = False
+
     def is_path_trusted(self, path: str) -> bool:
         """경로가 신뢰할 수 있는지 확인"""
         normalized = normalize_path(path)
@@ -256,7 +280,7 @@ class VibeAgent:
         logger.info(f"신뢰 경로 추가: {normalized}")
 
     def run_command_sync(self, message: str) -> str:
-        """로컬에서 CLI 명령 실행 (동기, 스레드에서 실행됨)"""
+        """로컬에서 CLI 명령 실행 (동기, 스레드에서 실행됨) - Popen 기반으로 인터럽트 지원"""
         cmd = [
             "claude",
             "--print",
@@ -273,27 +297,51 @@ class VibeAgent:
 
         logger.info(f"명령 실행: {' '.join(cmd[:4])}...")
 
+        # Windows에서는 shell=True 필요 (npm 글로벌 패키지 PATH 문제)
+        use_shell = sys.platform == "win32"
+        self.process_interrupted = False
+
         try:
-            result = subprocess.run(
-                cmd,
+            # Popen으로 프로세스 시작 (인터럽트 가능)
+            self.current_process = subprocess.Popen(
+                cmd if not use_shell else " ".join(f'"{c}"' if ' ' in c else c for c in cmd),
                 cwd=self.work_dir,
-                capture_output=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
                 text=True,
-                timeout=300,
-                env={**os.environ, 'NO_COLOR': '1'}
+                env={**os.environ, 'NO_COLOR': '1'},
+                shell=use_shell,
+                encoding='utf-8',
+                errors='replace'
             )
+
+            # 프로세스 완료 대기 (타임아웃 5분)
+            try:
+                stdout, stderr = self.current_process.communicate(timeout=300)
+            except subprocess.TimeoutExpired:
+                self.current_process.kill()
+                self.current_process.communicate()
+                self.current_process = None
+                return "타임아웃 (5분 초과)"
+
+            returncode = self.current_process.returncode
+            self.current_process = None
+
+            # 인터럽트 되었으면 특별 메시지 반환
+            if self.process_interrupted:
+                logger.info("프로세스가 인터럽트됨")
+                return "⏹️ 작업이 중단되었습니다. 다음 메시지를 기다리는 중..."
 
             if not self.session_started:
                 self.session_started = True
 
-            output = result.stdout
-            if result.stderr:
-                logger.warning(f"stderr: {result.stderr[:200]}")
+            output = stdout
+            if stderr:
+                logger.warning(f"stderr: {stderr[:200]}")
 
-            if result.returncode != 0:
-                logger.error(f"CLI 실패: returncode={result.returncode}, stderr={result.stderr[:200] if result.stderr else 'None'}, stdout={result.stdout[:200] if result.stdout else 'None'}")
-                # stderr가 없으면 stdout에 에러 메시지가 있을 수 있음
-                error_msg = result.stderr or result.stdout or '알 수 없는 오류'
+            if returncode != 0:
+                logger.error(f"CLI 실패: returncode={returncode}, stderr={stderr[:200] if stderr else 'None'}, stdout={stdout[:200] if stdout else 'None'}")
+                error_msg = stderr or stdout or '알 수 없는 오류'
 
                 # 세션 ID가 유효하지 않으면 새 세션 시작
                 if self.session_id and ("session" in error_msg.lower() or "not found" in error_msg.lower()):
@@ -311,11 +359,29 @@ class VibeAgent:
             logger.info(f"응답 ({len(output)}자): {output[:100]}...")
             return output
 
-        except subprocess.TimeoutExpired:
-            return "타임아웃 (5분 초과)"
         except Exception as e:
+            self.current_process = None
             logger.error(f"실행 오류: {e}")
             return f"실행 오류: {str(e)}"
+
+    def interrupt_current_process(self):
+        """현재 실행 중인 프로세스 인터럽트"""
+        if self.current_process:
+            try:
+                self.process_interrupted = True
+                self.current_process.terminate()  # SIGTERM 전송
+                logger.info("프로세스에 SIGTERM 전송")
+                # 1초 기다렸다가 안 죽으면 강제 종료
+                try:
+                    self.current_process.wait(timeout=1)
+                except subprocess.TimeoutExpired:
+                    self.current_process.kill()  # SIGKILL
+                    logger.info("프로세스에 SIGKILL 전송")
+                return True
+            except Exception as e:
+                logger.error(f"프로세스 인터럽트 실패: {e}")
+                return False
+        return False
 
     def _extract_and_save_session_id(self):
         """Claude Code의 최근 세션 ID 추출 및 저장 (프로젝트 디렉토리에서 직접)"""
@@ -384,6 +450,62 @@ class VibeAgent:
                 logger.debug(f"ping 오류: {e}")
                 break
 
+    async def sync_session_with_server(self):
+        """서버와 세션 ID 동기화 (디바이스 간 세션 공유)"""
+        if not self.is_ws_open():
+            return
+
+        try:
+            # 서버에 세션 동기화 요청
+            await self.ws.send(json.dumps({
+                "type": "session_sync",
+                "work_dir": self.work_dir,
+                "session_id": self.session_id  # 로컬에 있으면 전송, 없으면 None
+            }))
+
+            # 서버 응답 대기 (타임아웃 5초)
+            import asyncio
+            try:
+                response = await asyncio.wait_for(self.ws.recv(), timeout=5.0)
+                data = json.loads(response)
+
+                if data.get("type") == "session_info":
+                    server_session_id = data.get("session_id")
+                    source = data.get("source")
+
+                    if server_session_id and source == "server":
+                        # 서버에 기존 세션 있음 -> 사용
+                        self.session_id = server_session_id
+                        save_session_id(self.work_dir, server_session_id)
+                        logger.info(f"서버에서 세션 ID 동기화: {server_session_id[:20]}...")
+                    elif source == "agent":
+                        # Agent의 세션이 서버에 저장됨
+                        logger.info(f"세션 ID 서버에 저장됨: {self.session_id[:20] if self.session_id else 'None'}...")
+                    else:
+                        # 세션 없음 - 새로 생성됨
+                        logger.info("세션 없음, 새 세션으로 시작")
+
+            except asyncio.TimeoutError:
+                logger.warning("세션 동기화 타임아웃, 로컬 세션 사용")
+
+        except Exception as e:
+            logger.warning(f"세션 동기화 실패: {e}")
+
+    async def update_session_on_server(self, session_id: str):
+        """새 세션 ID를 서버에 업데이트"""
+        if not self.is_ws_open():
+            return
+
+        try:
+            await self.ws.send(json.dumps({
+                "type": "session_update",
+                "work_dir": self.work_dir,
+                "session_id": session_id
+            }))
+            logger.info(f"세션 ID 서버에 업데이트: {session_id[:20]}...")
+        except Exception as e:
+            logger.warning(f"세션 업데이트 실패: {e}")
+
     async def connect(self):
         """서버에 연결하고 메시지 처리"""
         logger.info(f"서버 연결 중: {self.server_url[:50]}...")
@@ -401,9 +523,14 @@ class VibeAgent:
                 response = await ws.recv()
                 logger.info(f"서버 응답: {response}")
 
+                # 서버와 세션 동기화
+                await self.sync_session_with_server()
+
                 print("\n" + "=" * 50)
                 print("  VibeCheck Agent 실행 중")
                 print(f"  작업 디렉토리: {self.work_dir}")
+                if self.session_id:
+                    print(f"  세션 ID: {self.session_id[:20]}...")
                 print(f"  스크린샷 기능: {'✅ 활성화' if HAS_SCREENSHOT else '❌ 비활성화'}")
                 print("  Slack에서 메시지를 보내세요!")
                 print("  종료: Ctrl+C")
@@ -452,7 +579,9 @@ class VibeAgent:
                 return
 
             # CLI 실행
+            logger.info("CLI 실행 시작...")
             await self.execute_and_respond(message)
+            logger.info("CLI 실행 완료")
 
         elif msg_type == "approval":
             # 서버에서 승인/거절 응답
@@ -486,6 +615,19 @@ class VibeAgent:
             if path:
                 self.add_trusted_path(path)
 
+        elif msg_type == "interrupt":
+            # 사용자가 Stop 버튼 클릭 - 현재 프로세스 중단
+            logger.info("인터럽트 요청 수신")
+            if self.processing and self.current_process:
+                interrupted = self.interrupt_current_process()
+                if interrupted and self.is_ws_open():
+                    await self.ws.send(json.dumps({
+                        "type": "response",
+                        "result": "⏹️ 작업이 중단되었습니다. 새 메시지를 입력하세요."
+                    }))
+            else:
+                logger.info("인터럽트할 프로세스 없음")
+
         elif msg_type == "ping":
             await self.ws.send(json.dumps({"type": "pong"}))
 
@@ -497,13 +639,32 @@ class VibeAgent:
 
     async def execute_and_respond(self, message: str):
         """CLI 실행 및 응답 (이미지 감지 포함)"""
+        logger.info("execute_and_respond 진입")
         self.processing = True
 
-        # 실행 전 이미지 목록 저장
-        before_images = get_images_with_mtime(self.work_dir)
+        # 실행 전 이미지 목록 저장 (비동기로 실행, 타임아웃 2초)
+        before_images = {}
+        try:
+            loop = asyncio.get_event_loop()
+            before_images = await asyncio.wait_for(
+                loop.run_in_executor(None, get_images_with_mtime, self.work_dir),
+                timeout=2.0
+            )
+            logger.debug(f"이미지 스캔 완료: {len(before_images)}개")
+        except asyncio.TimeoutError:
+            logger.warning("이미지 스캔 타임아웃 (2초), 스킵")
+        except Exception as e:
+            logger.warning(f"이미지 스캔 오류: {e}")
 
         # CLI 실행 (비동기 - ping 루프가 계속 동작)
+        logger.info("run_command 호출 전...")
+        old_session_id = self.session_id
         result = await self.run_command(message)
+        logger.info(f"run_command 완료: {len(result) if result else 0}자")
+
+        # 새 세션 ID가 생성되었으면 서버에 업데이트
+        if self.session_id and self.session_id != old_session_id:
+            await self.update_session_on_server(self.session_id)
 
         self.processing = False
 
