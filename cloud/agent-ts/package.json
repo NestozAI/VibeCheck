@@ -1,0 +1,41 @@
+{
+  "name": "vibecheck-agent",
+  "version": "1.0.0",
+  "description": "VibeCheck Agent - Remote control Claude Code from anywhere",
+  "type": "module",
+  "bin": {
+    "vibecheck-agent": "./dist/index.js"
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx src/index.ts",
+    "start": "node dist/index.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.2.9",
+    "ws": "^8.16.0",
+    "commander": "^12.0.0"
+  },
+  "optionalDependencies": {
+    "playwright": "^1.40.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.0",
+    "@types/ws": "^8.5.0",
+    "@types/node": "^20.0.0",
+    "tsx": "^4.0.0"
+  },
+  "keywords": [
+    "claude",
+    "claude-code",
+    "remote-control",
+    "vibecheck",
+    "ai-agent"
+  ],
+  "license": "MIT"
+}
