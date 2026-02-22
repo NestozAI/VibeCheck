@@ -18,7 +18,7 @@
 | :--- | :--- |
 | ✅ **Free** - use your own server | ⚡ **No server setup** - just install and go |
 | 💻 Full control over your environment | 🌐 Web-based chat interface |
-| 🔧 Self-installation & maintenance | 📦 `pip install vibecheck-agent` |
+| 🔧 Self-installation & maintenance | 📦 `curl` one-liner install |
 | [👇 **See installation guide below**](#self-hosted-setup) | [👉 **Get Started**](https://vibecheck.nestoz.co) |
 
 ---
