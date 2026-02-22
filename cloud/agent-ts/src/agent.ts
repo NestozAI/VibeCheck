@@ -1,7 +1,7 @@
 import WebSocket from "ws";
 import path from "node:path";
 import type { SDKSystemMessage } from "@anthropic-ai/claude-agent-sdk";
-import { ClaudeSession } from "./claude.js";
+import { ClaudeSession, AbortError } from "./claude.js";
 import { SecurityManager } from "./security.js";
 import {
   getImagesWithMtime,
@@ -255,6 +255,10 @@ export class VibeAgent {
         `[agent] 응답 전송 (${result.length}자, ${images.length}개 이미지)`,
       );
     } catch (e) {
+      // interrupt로 인한 AbortError는 handleInterrupt가 응답 메시지를 전송
+      // → 여기서는 아무것도 하지 않고 조용히 종료
+      if (e instanceof AbortError) return;
+
       const errMsg = e instanceof Error ? e.message : String(e);
       console.error("[agent] 쿼리 실행 오류:", errMsg);
       this.send({
@@ -354,22 +358,25 @@ export class VibeAgent {
 }
 
 /**
- * Run a function with a timeout. Returns fallback value on timeout.
+ * Run a function (sync or async) with a timeout.
+ * Returns fallback value if it times out or throws.
  */
 async function withTimeout<T>(
-  fn: () => T,
+  fn: () => T | Promise<T>,
   timeoutMs: number,
   fallback: T,
 ): Promise<T> {
   return new Promise<T>((resolve) => {
     const timer = setTimeout(() => resolve(fallback), timeoutMs);
-    try {
-      const result = fn();
-      clearTimeout(timer);
-      resolve(result);
-    } catch {
-      clearTimeout(timer);
-      resolve(fallback);
-    }
+    Promise.resolve()
+      .then(() => fn())
+      .then((result) => {
+        clearTimeout(timer);
+        resolve(result);
+      })
+      .catch(() => {
+        clearTimeout(timer);
+        resolve(fallback);
+      });
   });
 }

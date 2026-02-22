@@ -8,6 +8,8 @@ import {
   type Options,
   AbortError,
 } from "@anthropic-ai/claude-agent-sdk";
+
+export { AbortError };
 import type { SecurityManager } from "./security.js";
 
 export interface ClaudeSessionOptions {
@@ -104,9 +106,8 @@ export class ClaudeSession {
               resultText = (result as SDKResultSuccess).result;
             } else {
               const errorResult = result as SDKResultError;
-              resultText = `오류 (${errorResult.subtype}): ${
-                errorResult.errors?.join(", ") ?? "알 수 없는 오류"
-              }`;
+              resultText = `오류 (${errorResult.subtype}): ${errorResult.errors?.join(", ") ?? "알 수 없는 오류"
+                }`;
             }
             break;
           }
@@ -118,8 +119,10 @@ export class ClaudeSession {
         }
       }
     } catch (error) {
+      // AbortError는 agent.ts의 handleInterrupt가 단독으로 처리
+      // → 여기서 메시지를 반환하면 handleInterrupt와 중복 전송됨
       if (error instanceof AbortError) {
-        return "⏹️ 작업이 중단되었습니다. 다음 메시지를 기다리는 중...";
+        throw error;
       }
 
       // Invalid session → retry with new session

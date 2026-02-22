@@ -43,7 +43,7 @@ export function loadSessionId(workDir: string): string | null {
     if (!existsSync(filePath)) return null;
     const raw = readFileSync(filePath, "utf-8");
     const data: SessionData = JSON.parse(raw);
-    if (data.session_id && data.work_dir === workDir) {
+    if (data.session_id && path.resolve(data.work_dir) === path.resolve(workDir)) {
       console.log(
         `[session] 세션 ID 로드: ${data.session_id.slice(0, 20)}...`,
       );
