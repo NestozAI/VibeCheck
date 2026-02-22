@@ -12,6 +12,7 @@ import {
 
 export { AbortError };
 import type { SecurityManager } from "./security.js";
+import type { Skill } from "./skills.js";
 
 export interface ClaudeSessionOptions {
   workDir: string;
@@ -63,30 +64,29 @@ export class ClaudeSession {
   /**
    * Execute a query and return the result with metadata.
    * Tool usage events are emitted via onToolStatus as they happen.
+   * Skill preset (if provided) overrides systemPrompt and allowedTools.
    */
-  async execute(message: string, model?: string): Promise<ExecuteResult> {
+  async execute(message: string, model?: string, skill?: Skill): Promise<ExecuteResult> {
     this.abortController = new AbortController();
+
+    const globalAllowedTools = [
+      "Read", "Write", "Edit", "Bash", "Glob", "Grep",
+      "WebFetch", "WebSearch", "TodoWrite", "NotebookEdit",
+    ];
 
     const options: Options = {
       cwd: this.workDir,
       abortController: this.abortController,
       permissionMode: "default",
       canUseTool: this.security.canUseTool,
-      allowedTools: [
-        "Read",
-        "Write",
-        "Edit",
-        "Bash",
-        "Glob",
-        "Grep",
-        "WebFetch",
-        "WebSearch",
-        "TodoWrite",
-        "NotebookEdit",
-      ],
+      allowedTools: skill?.allowedTools ?? globalAllowedTools,
       includePartialMessages: false, // v1: no streaming, just final messages
       env: { ...process.env, NO_COLOR: "1" },
       ...(model ? { model } : {}),
+      // Skill system prompt: append to Claude's default system prompt
+      ...(skill?.systemPrompt
+        ? { systemPrompt: { type: "preset" as const, preset: "claude_code" as const, append: skill.systemPrompt } }
+        : {}),
     };
 
     // Session management
@@ -184,7 +184,7 @@ export class ClaudeSession {
         console.warn("[claude] 세션 ID가 유효하지 않음. 새 세션으로 재시도...");
         this.sessionId = null;
         this.sessionStarted = false;
-        return this.execute(message, model);
+        return this.execute(message, model, skill);
       }
 
       throw error;

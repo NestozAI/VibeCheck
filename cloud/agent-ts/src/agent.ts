@@ -34,12 +34,18 @@ import type {
   ServerToAgentMessage,
   ImageData,
   ToolStatusMessage,
+  SkillListResponseMessage,
+  ScheduleListResponseMessage,
+  ScheduleAddResponseMessage,
 } from "./protocol.js";
+import { getSkill, getAllSkills } from "./skills.js";
+import { TaskScheduler } from "./scheduler.js";
 
 export class VibeAgent {
   private ws: WebSocket | null = null;
   private claude: ClaudeSession;
   private security: SecurityManager;
+  private scheduler: TaskScheduler;
   private processing = false;
   private pingInterval: ReturnType<typeof setInterval> | null = null;
   private lastProjectPath: string | null = null;
@@ -60,6 +66,21 @@ export class VibeAgent {
         message: `${toolName}: ${JSON.stringify(input).slice(0, 200)}`,
       });
     };
+
+    // Scheduler — fires tasks automatically and sends results via WebSocket
+    this.scheduler = new TaskScheduler();
+    this.scheduler.onTaskFire = async (task) => {
+      const skill = task.skill_id ? getSkill(task.skill_id) : undefined;
+      const execResult = await this.claude.execute(task.message, undefined, skill);
+      this.scheduler.recordResult(task.id, execResult.text);
+      this.send({
+        type: "response",
+        result: `⏰ [${task.cron}] ${execResult.text}`,
+        ...(execResult.cost_usd !== undefined ? { cost_usd: execResult.cost_usd } : {}),
+        ...(execResult.num_turns !== undefined ? { num_turns: execResult.num_turns } : {}),
+      });
+    };
+    this.scheduler.start();
 
     // Session management
     let sessionId: string | null = null;
@@ -159,7 +180,7 @@ export class VibeAgent {
   private async handleMessage(msg: ServerToAgentMessage): Promise<void> {
     switch (msg.type) {
       case "query":
-        await this.handleQuery(msg.message, msg.model);
+        await this.handleQuery(msg.message, msg.model, msg.skill_id);
         break;
 
       case "approval":
@@ -191,10 +212,57 @@ export class VibeAgent {
       case "error":
         console.error(`[agent] 서버 오류: ${msg.message}`);
         break;
+
+      // ── Skill messages ────────────────────────────────────────────────────
+      case "skill_list": {
+        const skillList: SkillListResponseMessage = {
+          type: "skill_list_response",
+          skills: getAllSkills().map((s) => ({
+            id: s.id,
+            name: s.name,
+            icon: s.icon,
+            description: s.description,
+          })),
+        };
+        this.send(skillList);
+        break;
+      }
+
+      // ── Schedule messages ─────────────────────────────────────────────────
+      case "schedule_list": {
+        const scheduleList: ScheduleListResponseMessage = {
+          type: "schedule_list_response",
+          tasks: this.scheduler.getAll(),
+        };
+        this.send(scheduleList);
+        break;
+      }
+
+      case "schedule_add": {
+        const result = this.scheduler.addTask(
+          msg.cron,
+          msg.message,
+          msg.skill_id,
+        );
+        const addResp: ScheduleAddResponseMessage =
+          "error" in result
+            ? { type: "schedule_add_response", success: false, error: result.error }
+            : { type: "schedule_add_response", success: true, task: result };
+        this.send(addResp);
+        break;
+      }
+
+      case "schedule_remove":
+        this.scheduler.removeTask(msg.id);
+        break;
+
+      case "schedule_toggle":
+        this.scheduler.toggleTask(msg.id, msg.enabled);
+        break;
     }
   }
 
-  private async handleQuery(message: string, model?: string): Promise<void> {
+  private async handleQuery(message: string, model?: string, skillId?: string): Promise<void> {
     if (this.processing) {
       this.send({
         type: "response",
@@ -214,8 +282,10 @@ export class VibeAgent {
         {},
       );
 
-      // Execute Claude query
-      const execResult: ExecuteResult = await this.claude.execute(message, model);
+      // Execute Claude query (with optional skill preset)
+      const skill = skillId ? getSkill(skillId) : undefined;
+      if (skill) console.log(`[agent] 스킬 적용: ${skill.icon} ${skill.name}`);
+      const execResult: ExecuteResult = await this.claude.execute(message, model, skill);
 
       // Collect images
       const images: ImageData[] = [];

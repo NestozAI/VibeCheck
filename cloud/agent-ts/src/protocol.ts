@@ -66,7 +66,10 @@ export type AgentToServerMessage =
   | ApprovalRequiredMessage
   | SessionSyncMessage
   | SessionUpdateMessage
-  | ToolStatusMessage;
+  | ToolStatusMessage
+  | SkillListResponseMessage
+  | ScheduleListResponseMessage
+  | ScheduleAddResponseMessage;
 
 // === Server -> Agent messages ===
 
@@ -75,6 +78,8 @@ export interface QueryMessage {
   message: string;
   /** Optional model override. Defaults to Claude's configured model. */
   model?: string;
+  /** Optional skill preset ID (e.g. "code-review", "research"). */
+  skill_id?: string;
 }
 
 export interface ApprovalMessage {
@@ -103,6 +108,36 @@ export interface ErrorMessage {
   message: string;
 }
 
+// === Skill messages (Server -> Agent) ===
+
+export interface SkillListRequestMessage {
+  type: "skill_list";
+}
+
+// === Schedule messages (Server -> Agent) ===
+
+export interface ScheduleAddMessage {
+  type: "schedule_add";
+  cron: string;
+  message: string;
+  skill_id?: string;
+}
+
+export interface ScheduleRemoveMessage {
+  type: "schedule_remove";
+  id: string;
+}
+
+export interface ScheduleToggleMessage {
+  type: "schedule_toggle";
+  id: string;
+  enabled: boolean;
+}
+
+export interface ScheduleListRequestMessage {
+  type: "schedule_list";
+}
+
 export type ServerToAgentMessage =
   | QueryMessage
   | ApprovalMessage
@@ -111,5 +146,47 @@ export type ServerToAgentMessage =
   | PingMessage
   | PongMessage
   | ErrorMessage
-  | SessionInfoMessage;
+  | SessionInfoMessage
+  | SkillListRequestMessage
+  | ScheduleAddMessage
+  | ScheduleRemoveMessage
+  | ScheduleToggleMessage
+  | ScheduleListRequestMessage;
+
+// === Skill / Schedule response messages (Agent -> Server) ===
+
+export interface SkillInfo {
+  id: string;
+  name: string;
+  icon: string;
+  description: string;
+}
+
+export interface SkillListResponseMessage {
+  type: "skill_list_response";
+  skills: SkillInfo[];
+}
+
+export interface ScheduleTaskInfo {
+  id: string;
+  cron: string;
+  message: string;
+  skill_id?: string;
+  enabled: boolean;
+  created_at: string;
+  last_run?: string;
+  last_result?: string;
+}
+
+export interface ScheduleListResponseMessage {
+  type: "schedule_list_response";
+  tasks: ScheduleTaskInfo[];
+}
+
+export interface ScheduleAddResponseMessage {
+  type: "schedule_add_response";
+  success: boolean;
+  task?: ScheduleTaskInfo;
+  error?: string;
+}
 
