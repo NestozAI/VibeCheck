@@ -39,7 +39,7 @@ import type {
   ScheduleAddResponseMessage,
 } from "./protocol.js";
 import { getSkill, getAllSkills } from "./skills.js";
-import { TaskScheduler } from "./scheduler.js";
+import { TaskScheduler, type ScheduledTask } from "./scheduler.js";
 
 export class VibeAgent {
   private ws: WebSocket | null = null;
@@ -47,6 +47,8 @@ export class VibeAgent {
   private security: SecurityManager;
   private scheduler: TaskScheduler;
   private processing = false;
+  /** Scheduled tasks that arrived while a user query was in progress */
+  private pendingScheduledTasks: ScheduledTask[] = [];
   private pingInterval: ReturnType<typeof setInterval> | null = null;
   private lastProjectPath: string | null = null;
 
@@ -70,15 +72,13 @@ export class VibeAgent {
     // Scheduler — fires tasks automatically and sends results via WebSocket
     this.scheduler = new TaskScheduler();
     this.scheduler.onTaskFire = async (task) => {
-      const skill = task.skill_id ? getSkill(task.skill_id) : undefined;
-      const execResult = await this.claude.execute(task.message, undefined, skill);
-      this.scheduler.recordResult(task.id, execResult.text);
-      this.send({
-        type: "response",
-        result: `⏰ [${task.cron}] ${execResult.text}`,
-        ...(execResult.cost_usd !== undefined ? { cost_usd: execResult.cost_usd } : {}),
-        ...(execResult.num_turns !== undefined ? { num_turns: execResult.num_turns } : {}),
-      });
+      if (this.processing) {
+        // User query in progress: queue and run after it finishes
+        console.log(`[scheduler] 사용자 쿼리 진행 중, 태스크 큐에 추가: "${task.message.slice(0, 40)}"`);
+        this.pendingScheduledTasks.push(task);
+        return;
+      }
+      await this.runScheduledTask(task);
     };
     this.scheduler.start();
 
@@ -360,6 +360,44 @@ export class VibeAgent {
       });
     } finally {
       this.processing = false;
+      // Drain queued scheduled tasks (one at a time)
+      void this.drainScheduledQueue();
+    }
+  }
+
+  /** Run a scheduled task, respecting the processing guard */
+  private async runScheduledTask(task: ScheduledTask): Promise<void> {
+    if (this.processing) {
+      this.pendingScheduledTasks.push(task);
+      return;
+    }
+    this.processing = true;
+    try {
+      const skill = task.skill_id ? getSkill(task.skill_id) : undefined;
+      const execResult = await this.claude.execute(task.message, undefined, skill);
+      this.scheduler.recordResult(task.id, execResult.text);
+      this.send({
+        type: "response",
+        result: `⏰ [${task.cron}] ${execResult.text}`,
+        ...(execResult.cost_usd !== undefined ? { cost_usd: execResult.cost_usd } : {}),
+        ...(execResult.num_turns !== undefined ? { num_turns: execResult.num_turns } : {}),
+      });
+    } catch (e) {
+      if (!(e instanceof AbortError)) {
+        console.error("[scheduler] 태스크 실행 오류:", e);
+      }
+    } finally {
+      this.processing = false;
+      void this.drainScheduledQueue();
+    }
+  }
+
+  /** Process any tasks that queued up while a query was in progress */
+  private async drainScheduledQueue(): Promise<void> {
+    const next = this.pendingScheduledTasks.shift();
+    if (next) {
+      console.log(`[scheduler] 큐 드레인: "${next.message.slice(0, 40)}"`);
+      await this.runScheduledTask(next);
     }
   }
 

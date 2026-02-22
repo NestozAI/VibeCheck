@@ -100,6 +100,8 @@ export class ClaudeSession {
     let cost_usd: number | undefined;
     let num_turns: number | undefined;
     let newSessionId: string | null = null;
+    // Maps tool_use id → tool name, used to emit the correct name on tool_result
+    const toolUseIdMap = new Map<string, string>();
 
     try {
       this.currentQuery = query({ prompt: message, options });
@@ -124,6 +126,8 @@ export class ClaudeSession {
             if (Array.isArray(content)) {
               for (const block of content) {
                 if (block.type === "tool_use") {
+                  // Remember id → name for when tool_result arrives
+                  toolUseIdMap.set(block.id, block.name);
                   const detail = extractToolDetail(block.name, block.input as Record<string, unknown>);
                   this.onToolStatus?.(block.name, "start", detail);
                 }
@@ -138,8 +142,9 @@ export class ClaudeSession {
             if (Array.isArray(userContent)) {
               for (const block of userContent) {
                 if (block.type === "tool_result") {
-                  // Find which tool this result belongs to (best-effort by tool_use_id)
-                  this.onToolStatus?.("tool", "end");
+                  // Look up the actual tool name from the tool_use_id
+                  const toolName = toolUseIdMap.get(block.tool_use_id) ?? "tool";
+                  this.onToolStatus?.(toolName, "end");
                 }
               }
             }
