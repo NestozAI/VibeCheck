@@ -2,6 +2,7 @@ import {
   query,
   type Query,
   type SDKMessage,
+  type SDKAssistantMessage,
   type SDKResultSuccess,
   type SDKResultError,
   type SDKSystemMessage,
@@ -18,6 +19,13 @@ export interface ClaudeSessionOptions {
   security: SecurityManager;
 }
 
+/** Result returned from execute() — text + metadata */
+export interface ExecuteResult {
+  text: string;
+  cost_usd?: number;
+  num_turns?: number;
+}
+
 export class ClaudeSession {
   private currentQuery: Query | null = null;
   private abortController: AbortController | null = null;
@@ -31,6 +39,12 @@ export class ClaudeSession {
 
   /** Called when SDKSystemMessage (init) is received */
   onSystemInit?: (msg: SDKSystemMessage) => void;
+
+  /**
+   * Called when Claude starts or finishes using a tool.
+   * Lets agent.ts forward tool_status messages to the web UI.
+   */
+  onToolStatus?: (tool: string, status: "start" | "end", detail?: string) => void;
 
   constructor(options: ClaudeSessionOptions) {
     this.workDir = options.workDir;
@@ -47,10 +61,10 @@ export class ClaudeSession {
   }
 
   /**
-   * Execute a query and return the final result text.
-   * Streams SDKMessages internally; partial messages are ignored in v1.
+   * Execute a query and return the result with metadata.
+   * Tool usage events are emitted via onToolStatus as they happen.
    */
-  async execute(message: string): Promise<string> {
+  async execute(message: string, model?: string): Promise<ExecuteResult> {
     this.abortController = new AbortController();
 
     const options: Options = {
@@ -72,6 +86,7 @@ export class ClaudeSession {
       ],
       includePartialMessages: false, // v1: no streaming, just final messages
       env: { ...process.env, NO_COLOR: "1" },
+      ...(model ? { model } : {}),
     };
 
     // Session management
@@ -82,6 +97,8 @@ export class ClaudeSession {
     }
 
     let resultText = "";
+    let cost_usd: number | undefined;
+    let num_turns: number | undefined;
     let newSessionId: string | null = null;
 
     try {
@@ -100,20 +117,51 @@ export class ClaudeSession {
             }
             break;
 
+          case "assistant": {
+            // Detect tool_use blocks → emit tool status events
+            const assistantMsg = msg as SDKAssistantMessage;
+            const content = assistantMsg.message?.content;
+            if (Array.isArray(content)) {
+              for (const block of content) {
+                if (block.type === "tool_use") {
+                  const detail = extractToolDetail(block.name, block.input as Record<string, unknown>);
+                  this.onToolStatus?.(block.name, "start", detail);
+                }
+              }
+            }
+            break;
+          }
+
+          case "user": {
+            // tool_result blocks signal a tool finished execution
+            const userContent = (msg as any).message?.content;
+            if (Array.isArray(userContent)) {
+              for (const block of userContent) {
+                if (block.type === "tool_result") {
+                  // Find which tool this result belongs to (best-effort by tool_use_id)
+                  this.onToolStatus?.("tool", "end");
+                }
+              }
+            }
+            break;
+          }
+
           case "result": {
             const result = msg as SDKResultSuccess | SDKResultError;
+            num_turns = result.num_turns;
             if (result.subtype === "success") {
-              resultText = (result as SDKResultSuccess).result;
+              const success = result as SDKResultSuccess;
+              resultText = success.result;
+              cost_usd = success.total_cost_usd;
             } else {
               const errorResult = result as SDKResultError;
+              cost_usd = errorResult.total_cost_usd;
               resultText = `오류 (${errorResult.subtype}): ${errorResult.errors?.join(", ") ?? "알 수 없는 오류"
                 }`;
             }
             break;
           }
 
-          // stream_event (partial messages), assistant, user, tool_progress etc.
-          // are ignored in v1 — we only care about the final result
           default:
             break;
         }
@@ -136,7 +184,7 @@ export class ClaudeSession {
         console.warn("[claude] 세션 ID가 유효하지 않음. 새 세션으로 재시도...");
         this.sessionId = null;
         this.sessionStarted = false;
-        return this.execute(message);
+        return this.execute(message, model);
       }
 
       throw error;
@@ -154,7 +202,7 @@ export class ClaudeSession {
       this.onSessionId?.(newSessionId);
     }
 
-    return resultText;
+    return { text: resultText, cost_usd, num_turns };
   }
 
   /**
@@ -179,4 +227,33 @@ export class ClaudeSession {
 
 function hasSessionId(msg: SDKMessage): msg is SDKMessage & { session_id: string } {
   return "session_id" in msg && typeof (msg as any).session_id === "string";
+}
+
+/** Extract a short human-readable detail from a tool input */
+function extractToolDetail(
+  toolName: string,
+  input: Record<string, unknown>,
+): string | undefined {
+  switch (toolName) {
+    case "Read":
+    case "Write":
+    case "Edit":
+      return typeof input.file_path === "string" ? input.file_path : undefined;
+    case "Bash":
+      return typeof input.command === "string"
+        ? input.command.slice(0, 80)
+        : undefined;
+    case "Glob":
+    case "Grep":
+      return typeof input.pattern === "string" ? input.pattern : undefined;
+    case "WebFetch":
+    case "WebSearch":
+      return typeof input.url === "string"
+        ? input.url
+        : typeof input.query === "string"
+          ? input.query
+          : undefined;
+    default:
+      return undefined;
+  }
 }

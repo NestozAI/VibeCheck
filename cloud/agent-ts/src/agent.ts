@@ -2,6 +2,7 @@ import WebSocket from "ws";
 import path from "node:path";
 import type { SDKSystemMessage } from "@anthropic-ai/claude-agent-sdk";
 import { ClaudeSession, AbortError } from "./claude.js";
+import type { ExecuteResult } from "./claude.js";
 import { SecurityManager } from "./security.js";
 import {
   getImagesWithMtime,
@@ -32,6 +33,7 @@ import type {
   AgentToServerMessage,
   ServerToAgentMessage,
   ImageData,
+  ToolStatusMessage,
 } from "./protocol.js";
 
 export class VibeAgent {
@@ -81,6 +83,19 @@ export class VibeAgent {
         work_dir: workDir,
         session_id: id,
       });
+    };
+
+    // Forward tool usage events to web UI as tool_status messages
+    this.claude.onToolStatus = (tool, status, detail) => {
+      const label = toolLabel(tool, status);
+      const toolMsg: ToolStatusMessage = {
+        type: "tool_status",
+        tool,
+        status,
+        label,
+        ...(detail ? { detail } : {}),
+      };
+      this.send(toolMsg);
     };
 
     // Log system init info
@@ -144,7 +159,7 @@ export class VibeAgent {
   private async handleMessage(msg: ServerToAgentMessage): Promise<void> {
     switch (msg.type) {
       case "query":
-        await this.handleQuery(msg.message);
+        await this.handleQuery(msg.message, msg.model);
         break;
 
       case "approval":
@@ -179,7 +194,7 @@ export class VibeAgent {
     }
   }
 
-  private async handleQuery(message: string): Promise<void> {
+  private async handleQuery(message: string, model?: string): Promise<void> {
     if (this.processing) {
       this.send({
         type: "response",
@@ -200,7 +215,7 @@ export class VibeAgent {
       );
 
       // Execute Claude query
-      const result = await this.claude.execute(message);
+      const execResult: ExecuteResult = await this.claude.execute(message, model);
 
       // Collect images
       const images: ImageData[] = [];
@@ -210,7 +225,7 @@ export class VibeAgent {
         message.toLowerCase().includes(kw),
       );
       if (wantsScreenshot) {
-        const screenshot = await this.generateScreenshot(message, result);
+        const screenshot = await this.generateScreenshot(message, execResult.text);
         if (screenshot) images.push(screenshot);
       }
 
@@ -231,7 +246,7 @@ export class VibeAgent {
 
       // Extract image paths from response text
       if (images.length === 0) {
-        const referenced = extractImagePathsFromText(result, this.workDir);
+        const referenced = extractImagePathsFromText(execResult.text, this.workDir);
         for (const imgPath of referenced.slice(0, MAX_IMAGES_PER_RESPONSE)) {
           const b64 = imageToBase64(imgPath);
           if (b64) {
@@ -243,17 +258,25 @@ export class VibeAgent {
         }
       }
 
-      // Send response
+      // Send response (with cost + turns metadata)
       const response: AgentToServerMessage = {
         type: "response",
-        result,
+        result: execResult.text,
         ...(images.length > 0 ? { images } : {}),
+        ...(execResult.cost_usd !== undefined ? { cost_usd: execResult.cost_usd } : {}),
+        ...(execResult.num_turns !== undefined ? { num_turns: execResult.num_turns } : {}),
       };
       this.send(response);
 
-      console.log(
-        `[agent] 응답 전송 (${result.length}자, ${images.length}개 이미지)`,
-      );
+      if (execResult.cost_usd !== undefined) {
+        console.log(
+          `[agent] 응답 전송 (${execResult.text.length}자, ${images.length}개 이미지, $${execResult.cost_usd.toFixed(4)}, ${execResult.num_turns}턴)`,
+        );
+      } else {
+        console.log(
+          `[agent] 응답 전송 (${execResult.text.length}자, ${images.length}개 이미지)`,
+        );
+      }
     } catch (e) {
       // interrupt로 인한 AbortError는 handleInterrupt가 응답 메시지를 전송
       // → 여기서는 아무것도 하지 않고 조용히 종료
@@ -380,3 +403,23 @@ async function withTimeout<T>(
       });
   });
 }
+
+/** Map SDK tool names to human-readable Korean labels for the web UI */
+function toolLabel(tool: string, status: "start" | "end"): string {
+  const labels: Record<string, [string, string]> = {
+    Read: ["📖 파일 읽는 중...", "📖 파일 읽기 완료"],
+    Write: ["✏️ 파일 쓰는 중...", "✏️ 파일 쓰기 완료"],
+    Edit: ["✂️ 코드 수정 중...", "✂️ 코드 수정 완료"],
+    Bash: ["⚙️ 명령 실행 중...", "⚙️ 명령 실행 완료"],
+    Glob: ["🔍 파일 검색 중...", "🔍 파일 검색 완료"],
+    Grep: ["🔍 코드 검색 중...", "🔍 코드 검색 완료"],
+    WebFetch: ["🌐 웹 요청 중...", "🌐 웹 요청 완료"],
+    WebSearch: ["🌐 웹 검색 중...", "🌐 웹 검색 완료"],
+    TodoWrite: ["📝 할 일 저장 중...", "📝 할 일 저장 완료"],
+    NotebookEdit: ["📓 노트북 수정 중...", "📓 노트북 수정 완료"],
+  };
+  const pair = labels[tool];
+  if (!pair) return status === "start" ? `🔧 ${tool} 실행 중...` : `🔧 ${tool} 완료`;
+  return status === "start" ? pair[0] : pair[1];
+}
+
