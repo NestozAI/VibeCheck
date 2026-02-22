@@ -106,6 +106,11 @@ export class VibeAgent {
       });
     };
 
+    // Forward streaming text chunks to web UI
+    this.claude.onStreamingChunk = (delta, index) => {
+      this.send({ type: "streaming_chunk", delta, index });
+    };
+
     // Forward tool usage events to web UI as tool_status messages
     this.claude.onToolStatus = (tool, status, detail) => {
       const label = toolLabel(tool, status);
@@ -180,7 +185,13 @@ export class VibeAgent {
   private async handleMessage(msg: ServerToAgentMessage): Promise<void> {
     switch (msg.type) {
       case "query":
-        await this.handleQuery(msg.message, msg.model, msg.skill_id);
+        await this.handleQuery(
+          msg.message,
+          msg.model,
+          msg.skill_id,
+          msg.system_prompt,
+          msg.agents,
+        );
         break;
 
       case "approval":
@@ -262,7 +273,13 @@ export class VibeAgent {
     }
   }
 
-  private async handleQuery(message: string, model?: string, skillId?: string): Promise<void> {
+  private async handleQuery(
+    message: string,
+    model?: string,
+    skillId?: string,
+    systemPrompt?: string,
+    agents?: Record<string, import("./protocol.js").AgentDef>,
+  ): Promise<void> {
     if (this.processing) {
       this.send({
         type: "response",
@@ -285,7 +302,13 @@ export class VibeAgent {
       // Execute Claude query (with optional skill preset)
       const skill = skillId ? getSkill(skillId) : undefined;
       if (skill) console.log(`[agent] 스킬 적용: ${skill.icon} ${skill.name}`);
-      const execResult: ExecuteResult = await this.claude.execute(message, model, skill);
+      const execResult: ExecuteResult = await this.claude.execute(
+        message,
+        model,
+        skill,
+        systemPrompt,
+        agents,
+      );
 
       // Collect images
       const images: ImageData[] = [];
@@ -328,13 +351,14 @@ export class VibeAgent {
         }
       }
 
-      // Send response (with cost + turns metadata)
+      // Send response (with cost + turns + usage metadata)
       const response: AgentToServerMessage = {
         type: "response",
         result: execResult.text,
         ...(images.length > 0 ? { images } : {}),
         ...(execResult.cost_usd !== undefined ? { cost_usd: execResult.cost_usd } : {}),
         ...(execResult.num_turns !== undefined ? { num_turns: execResult.num_turns } : {}),
+        ...(execResult.usage ? { usage: execResult.usage } : {}),
       };
       this.send(response);
 

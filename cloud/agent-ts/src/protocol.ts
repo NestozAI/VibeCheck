@@ -25,6 +25,13 @@ export interface ResponseMessage {
   cost_usd?: number;
   /** Number of agentic turns used */
   num_turns?: number;
+  /** Token usage breakdown */
+  usage?: {
+    input_tokens: number;
+    output_tokens: number;
+    cache_read_input_tokens: number;
+    cache_creation_input_tokens: number;
+  };
 }
 
 export interface ApprovalRequiredMessage {
@@ -59,6 +66,17 @@ export interface ToolStatusMessage {
   detail?: string;
 }
 
+/**
+ * Real-time streaming chunk — emitted for each text delta while Claude is generating.
+ * Web UI can use these to show a typing animation before the final response arrives.
+ * The final `response` message is always sent at the end (backwards-compatible).
+ */
+export interface StreamingChunkMessage {
+  type: "streaming_chunk";
+  delta: string;    // incremental text
+  index: number;   // sequence number within this response
+}
+
 export type AgentToServerMessage =
   | PingMessage
   | PongMessage
@@ -67,11 +85,20 @@ export type AgentToServerMessage =
   | SessionSyncMessage
   | SessionUpdateMessage
   | ToolStatusMessage
+  | StreamingChunkMessage
   | SkillListResponseMessage
   | ScheduleListResponseMessage
   | ScheduleAddResponseMessage;
 
 // === Server -> Agent messages ===
+
+/** Definition of a custom sub-agent for multi-agent workflows */
+export interface AgentDef {
+  description: string;
+  prompt: string;
+  tools?: string[];
+  disallowedTools?: string[];
+}
 
 export interface QueryMessage {
   type: "query";
@@ -80,6 +107,16 @@ export interface QueryMessage {
   model?: string;
   /** Optional skill preset ID (e.g. "code-review", "research"). */
   skill_id?: string;
+  /**
+   * Custom system prompt injected for this query only.
+   * Appended after any skill systemPrompt.
+   */
+  system_prompt?: string;
+  /**
+   * Custom sub-agents for multi-agent workflows.
+   * Keys are agent names; Claude can invoke them via the Task tool.
+   */
+  agents?: Record<string, AgentDef>;
 }
 
 export interface ApprovalMessage {

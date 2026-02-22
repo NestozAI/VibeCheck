@@ -3,9 +3,11 @@ import {
   type Query,
   type SDKMessage,
   type SDKAssistantMessage,
+  type SDKPartialAssistantMessage,
   type SDKResultSuccess,
   type SDKResultError,
   type SDKSystemMessage,
+  type AgentDefinition,
   type Options,
   AbortError,
 } from "@anthropic-ai/claude-agent-sdk";
@@ -13,6 +15,7 @@ import {
 export { AbortError };
 import type { SecurityManager } from "./security.js";
 import type { Skill } from "./skills.js";
+import type { AgentDef } from "./protocol.js";
 
 export interface ClaudeSessionOptions {
   workDir: string;
@@ -25,6 +28,12 @@ export interface ExecuteResult {
   text: string;
   cost_usd?: number;
   num_turns?: number;
+  usage?: {
+    input_tokens: number;
+    output_tokens: number;
+    cache_read_input_tokens: number;
+    cache_creation_input_tokens: number;
+  };
 }
 
 export class ClaudeSession {
@@ -41,10 +50,10 @@ export class ClaudeSession {
   /** Called when SDKSystemMessage (init) is received */
   onSystemInit?: (msg: SDKSystemMessage) => void;
 
-  /**
-   * Called when Claude starts or finishes using a tool.
-   * Lets agent.ts forward tool_status messages to the web UI.
-   */
+  /** Called when SDK emits a streaming text delta */
+  onStreamingChunk?: (delta: string, index: number) => void;
+
+  /** Called when Claude starts or finishes using a tool */
   onToolStatus?: (tool: string, status: "start" | "end", detail?: string) => void;
 
   constructor(options: ClaudeSessionOptions) {
@@ -63,10 +72,17 @@ export class ClaudeSession {
 
   /**
    * Execute a query and return the result with metadata.
-   * Tool usage events are emitted via onToolStatus as they happen.
-   * Skill preset (if provided) overrides systemPrompt and allowedTools.
+   * - Streams text chunks via onStreamingChunk (stream_event)
+   * - Tool usage events via onToolStatus
+   * - Skill/systemPrompt/agents applied to SDK options
    */
-  async execute(message: string, model?: string, skill?: Skill): Promise<ExecuteResult> {
+  async execute(
+    message: string,
+    model?: string,
+    skill?: Skill,
+    systemPrompt?: string,
+    agents?: Record<string, AgentDef>,
+  ): Promise<ExecuteResult> {
     this.abortController = new AbortController();
 
     const globalAllowedTools = [
@@ -74,19 +90,38 @@ export class ClaudeSession {
       "WebFetch", "WebSearch", "TodoWrite", "NotebookEdit",
     ];
 
+    // Build systemPrompt option: prefer skill, fallback to per-query prompt
+    const skillPrompt = skill?.systemPrompt;
+    const combinedPrompt = [skillPrompt, systemPrompt].filter(Boolean).join("\n\n");
+
+    // Convert AgentDef → SDK AgentDefinition
+    const sdkAgents: Record<string, AgentDefinition> | undefined = agents
+      ? Object.fromEntries(
+        Object.entries(agents).map(([name, def]) => [
+          name,
+          {
+            description: def.description,
+            prompt: def.prompt,
+            ...(def.tools ? { tools: def.tools } : {}),
+            ...(def.disallowedTools ? { disallowedTools: def.disallowedTools } : {}),
+          } satisfies AgentDefinition,
+        ]),
+      )
+      : undefined;
+
     const options: Options = {
       cwd: this.workDir,
       abortController: this.abortController,
       permissionMode: "default",
       canUseTool: this.security.canUseTool,
       allowedTools: skill?.allowedTools ?? globalAllowedTools,
-      includePartialMessages: false, // v1: no streaming, just final messages
+      includePartialMessages: true, // emit stream_event for real-time chunks
       env: { ...process.env, NO_COLOR: "1" },
       ...(model ? { model } : {}),
-      // Skill system prompt: append to Claude's default system prompt
-      ...(skill?.systemPrompt
-        ? { systemPrompt: { type: "preset" as const, preset: "claude_code" as const, append: skill.systemPrompt } }
+      ...(combinedPrompt
+        ? { systemPrompt: { type: "preset" as const, preset: "claude_code" as const, append: combinedPrompt } }
         : {}),
+      ...(sdkAgents ? { agents: sdkAgents } : {}),
     };
 
     // Session management
@@ -99,9 +134,11 @@ export class ClaudeSession {
     let resultText = "";
     let cost_usd: number | undefined;
     let num_turns: number | undefined;
+    let usage: ExecuteResult["usage"] | undefined;
     let newSessionId: string | null = null;
-    // Maps tool_use id → tool name, used to emit the correct name on tool_result
+    // Maps tool_use id → tool name for correct end-event names
     const toolUseIdMap = new Map<string, string>();
+    let chunkIndex = 0;
 
     try {
       this.currentQuery = query({ prompt: message, options });
@@ -119,16 +156,33 @@ export class ClaudeSession {
             }
             break;
 
+          // ── Streaming text delta ──────────────────────────────────────────
+          case "stream_event": {
+            const partial = msg as SDKPartialAssistantMessage;
+            const event = partial.event as any;
+            // content_block_delta carries text deltas
+            if (
+              event?.type === "content_block_delta" &&
+              event?.delta?.type === "text_delta" &&
+              typeof event?.delta?.text === "string"
+            ) {
+              this.onStreamingChunk?.(event.delta.text, chunkIndex++);
+            }
+            break;
+          }
+
+          // ── Tool start ───────────────────────────────────────────────────
           case "assistant": {
-            // Detect tool_use blocks → emit tool status events
             const assistantMsg = msg as SDKAssistantMessage;
             const content = assistantMsg.message?.content;
             if (Array.isArray(content)) {
               for (const block of content) {
                 if (block.type === "tool_use") {
-                  // Remember id → name for when tool_result arrives
                   toolUseIdMap.set(block.id, block.name);
-                  const detail = extractToolDetail(block.name, block.input as Record<string, unknown>);
+                  const detail = extractToolDetail(
+                    block.name,
+                    block.input as Record<string, unknown>,
+                  );
                   this.onToolStatus?.(block.name, "start", detail);
                 }
               }
@@ -136,13 +190,12 @@ export class ClaudeSession {
             break;
           }
 
+          // ── Tool end ─────────────────────────────────────────────────────
           case "user": {
-            // tool_result blocks signal a tool finished execution
             const userContent = (msg as any).message?.content;
             if (Array.isArray(userContent)) {
               for (const block of userContent) {
                 if (block.type === "tool_result") {
-                  // Look up the actual tool name from the tool_use_id
                   const toolName = toolUseIdMap.get(block.tool_use_id) ?? "tool";
                   this.onToolStatus?.(toolName, "end");
                 }
@@ -151,6 +204,7 @@ export class ClaudeSession {
             break;
           }
 
+          // ── Final result ─────────────────────────────────────────────────
           case "result": {
             const result = msg as SDKResultSuccess | SDKResultError;
             num_turns = result.num_turns;
@@ -158,6 +212,16 @@ export class ClaudeSession {
               const success = result as SDKResultSuccess;
               resultText = success.result;
               cost_usd = success.total_cost_usd;
+              // Extract token usage breakdown
+              if (success.usage) {
+                const u = success.usage as any;
+                usage = {
+                  input_tokens: u.input_tokens ?? 0,
+                  output_tokens: u.output_tokens ?? 0,
+                  cache_read_input_tokens: u.cache_read_input_tokens ?? 0,
+                  cache_creation_input_tokens: u.cache_creation_input_tokens ?? 0,
+                };
+              }
             } else {
               const errorResult = result as SDKResultError;
               cost_usd = errorResult.total_cost_usd;
@@ -172,15 +236,11 @@ export class ClaudeSession {
         }
       }
     } catch (error) {
-      // AbortError는 agent.ts의 handleInterrupt가 단독으로 처리
-      // → 여기서 메시지를 반환하면 handleInterrupt와 중복 전송됨
-      if (error instanceof AbortError) {
-        throw error;
-      }
+      // AbortError는 handleInterrupt가 단독으로 처리
+      if (error instanceof AbortError) throw error;
 
       // Invalid session → retry with new session
-      const errMsg =
-        error instanceof Error ? error.message : String(error);
+      const errMsg = error instanceof Error ? error.message : String(error);
       if (
         this.sessionId &&
         (errMsg.toLowerCase().includes("session") ||
@@ -189,7 +249,7 @@ export class ClaudeSession {
         console.warn("[claude] 세션 ID가 유효하지 않음. 새 세션으로 재시도...");
         this.sessionId = null;
         this.sessionStarted = false;
-        return this.execute(message, model, skill);
+        return this.execute(message, model, skill, systemPrompt, agents);
       }
 
       throw error;
@@ -199,15 +259,13 @@ export class ClaudeSession {
     }
 
     // Update session state
-    if (!this.sessionStarted) {
-      this.sessionStarted = true;
-    }
+    if (!this.sessionStarted) this.sessionStarted = true;
     if (newSessionId && newSessionId !== this.sessionId) {
       this.sessionId = newSessionId;
       this.onSessionId?.(newSessionId);
     }
 
-    return { text: resultText, cost_usd, num_turns };
+    return { text: resultText, cost_usd, num_turns, usage };
   }
 
   /**
