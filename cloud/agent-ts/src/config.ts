@@ -52,13 +52,10 @@ export const SAFE_SYSTEM_COMMANDS = new Set([
 ]);
 
 export const SCREENSHOT_KEYWORDS = [
-  "스크린샷",
   "screenshot",
-  "캡처",
   "capture",
-  "보여줘",
   "show me",
+  "show",
   "preview",
-  "미리보기",
   "ui",
 ];

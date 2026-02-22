@@ -1,23 +1,23 @@
 #!/bin/bash
 
-# VibeCheck 실행 스크립트
+# VibeCheck run script
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
-# .env 확인
+# Check .env
 if [ ! -f ".env" ]; then
-    echo "Error: .env 파일이 없습니다."
-    echo "먼저 ./setup.sh 를 실행해주세요."
+    echo "Error: .env file not found."
+    echo "Please run ./setup.sh first."
     exit 1
 fi
 
-# 가상환경 활성화 (venv → conda → 시스템 순서)
+# Activate virtual environment (venv -> conda -> system order)
 if [ -d ".venv" ]; then
     source .venv/bin/activate
 elif command -v conda &> /dev/null; then
     eval "$(conda shell.bash hook 2>/dev/null)" && conda activate vibecheck 2>/dev/null || true
 fi
 
-echo "VibeCheck 시작..."
+echo "Starting VibeCheck..."
 python main.py

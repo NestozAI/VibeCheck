@@ -1,20 +1,20 @@
 """
-터미널 출력 청소기 (Cleaner)
-- ANSI 이스케이프 코드 제거
-- 노이즈 필터링 (스피너, 진행 표시 등)
-- 슬랙용 포맷팅
+Terminal Output Cleaner
+- ANSI escape code removal
+- Noise filtering (spinners, progress indicators, etc.)
+- Slack-compatible formatting
 """
 
 import re
 from typing import Optional
 
 # =============================================================================
-# ANSI 이스케이프 코드 제거
+# ANSI escape code removal
 # =============================================================================
 
-# ANSI 이스케이프 시퀀스 패턴들
+# ANSI escape sequence patterns
 ANSI_PATTERNS = [
-    r'\x1b\[[0-9;]*[a-zA-Z]',      # CSI sequences: \x1b[0m, \x1b[1;32m 등
+    r'\x1b\[[0-9;]*[a-zA-Z]',      # CSI sequences: \x1b[0m, \x1b[1;32m etc.
     r'\x1b\][^\x07]*\x07',          # OSC sequences: \x1b]0;title\x07
     r'\x1b\[\?[0-9;]*[a-zA-Z]',     # Private sequences: \x1b[?25h
     r'\x1b[PX^_][^\x1b]*\x1b\\',    # DCS, SOS, PM, APC sequences
@@ -26,61 +26,61 @@ ANSI_PATTERNS = [
     r'\x07',                         # Bell
 ]
 
-# 합쳐진 패턴 (성능 최적화)
+# Combined pattern (performance optimization)
 ANSI_REGEX = re.compile('|'.join(ANSI_PATTERNS))
 
 
 def remove_ansi(text: str) -> str:
     """
-    ANSI 이스케이프 코드를 완전히 제거
+    Completely remove ANSI escape codes.
 
-    터미널 색상, 커서 이동, 스크롤 등 모든 제어 문자 제거
+    Removes all control characters including terminal colors, cursor movement, scrolling, etc.
     """
     return ANSI_REGEX.sub('', text)
 
 
 # =============================================================================
-# 노이즈 필터링
+# Noise filtering
 # =============================================================================
 
-# 무시할 패턴들 (진행 표시, 스피너, 로딩 메시지 등)
+# Patterns to ignore (progress indicators, spinners, loading messages, etc.)
 NOISE_PATTERNS = [
-    # 스피너 문자
+    # Spinner characters
     r'^[\s]*[/\\|─━\-⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏●○◐◑◒◓][\s]*$',
-    # 진행 표시 메시지 (case insensitive는 함수에서 처리)
+    # Progress indicator messages (case insensitive handled in function)
     r'^[\s]*(loading|processing|thinking|waiting|connecting|initializing|Loading|Processing|Thinking|Waiting|Connecting|Initializing)\.{0,3}[\s]*$',
-    # 빈 줄 또는 공백만 있는 줄
+    # Empty lines or whitespace-only lines
     r'^[\s]*$',
-    # 커서 관련 출력
+    # Cursor-related output
     r'^\s*\d+;\d+[HR]',
-    # 진행률 바
+    # Progress bar
     r'[\[█▓▒░\]]{3,}',
     r'\d+%\s*[\[█▓▒░\]]*',
-    # Claude Code 특유의 노이즈
+    # Claude Code specific noise
     r'^[\s]*›[\s]*$',
     r'^[\s]*\.\.\.$',
     r'^\s*⠋\s*',
     r'^\s*⠙\s*',
     r'^\s*⠹\s*',
-    # 반복되는 점들
+    # Repeated dots
     r'^\.+$',
 ]
 
 
 def is_noise_line(line: str) -> bool:
-    """한 줄이 노이즈인지 판별"""
+    """Determine if a line is noise"""
     cleaned = line.strip()
 
-    # 빈 줄
+    # Empty line
     if not cleaned:
         return True
 
-    # 스피너 문자만 있는 경우
+    # Only spinner characters
     spinner_chars = set('/\\|─━-⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏●○◐◑◒◓')
     if all(c in spinner_chars or c.isspace() for c in cleaned):
         return True
 
-    # 노이즈 패턴 매칭
+    # Noise pattern matching
     for pattern in NOISE_PATTERNS:
         if re.match(pattern, cleaned, re.IGNORECASE):
             return True
@@ -90,14 +90,14 @@ def is_noise_line(line: str) -> bool:
 
 def filter_noise(text: str) -> str:
     """
-    노이즈 라인 제거
+    Remove noise lines.
 
-    스피너, 로딩 메시지, 진행 표시 등 불필요한 출력 제거
+    Removes unnecessary output such as spinners, loading messages, progress indicators, etc.
     """
     lines = text.split('\n')
     filtered_lines = [line for line in lines if not is_noise_line(line)]
 
-    # 연속된 빈 줄 정리 (최대 1개)
+    # Clean up consecutive empty lines (max 1)
     result = []
     prev_empty = False
     for line in filtered_lines:
@@ -114,27 +114,27 @@ def filter_noise(text: str) -> str:
 
 
 # =============================================================================
-# 코드 블록 처리
+# Code block processing
 # =============================================================================
 
 def fix_code_blocks(text: str) -> str:
     """
-    코드 블록 포맷 정리
+    Clean up code block formatting.
 
-    - 언어 태그 정규화
-    - 중첩된 백틱 처리
-    - 슬랙 호환 포맷으로 변환
+    - Normalize language tags
+    - Handle nested backticks
+    - Convert to Slack-compatible format
     """
-    # 이미 있는 코드 블록 유지
-    # ```language ... ``` 형식 확인
+    # Keep existing code blocks
+    # Check ```language ... ``` format
 
-    # 백틱 3개로 시작하는 코드 블록 찾기
+    # Find code blocks starting with triple backticks
     code_block_pattern = r'```(\w*)\n?(.*?)```'
 
     def format_code_block(match):
         lang = match.group(1) or ''
         code = match.group(2)
-        # 슬랙은 언어 하이라이팅을 지원하지 않지만 포맷은 유지
+        # Slack doesn't support language highlighting, but keep the format
         return f'```{lang}\n{code.strip()}\n```'
 
     text = re.sub(code_block_pattern, format_code_block, text, flags=re.DOTALL)
@@ -143,17 +143,17 @@ def fix_code_blocks(text: str) -> str:
 
 
 # =============================================================================
-# 슬랙 메시지 분할
+# Slack message splitting
 # =============================================================================
 
-SLACK_MAX_LENGTH = 3900  # 슬랙 메시지 최대 길이 (여유 두고 4000 미만)
+SLACK_MAX_LENGTH = 3900  # Slack message max length (under 4000 with buffer)
 
 
 def split_message(text: str, max_length: int = SLACK_MAX_LENGTH) -> list[str]:
     """
-    긴 메시지를 슬랙 제한에 맞게 분할
+    Split long messages to fit Slack limits.
 
-    코드 블록이 중간에 잘리지 않도록 주의
+    Ensures code blocks are not split in the middle.
     """
     if len(text) <= max_length:
         return [text]
@@ -166,27 +166,27 @@ def split_message(text: str, max_length: int = SLACK_MAX_LENGTH) -> list[str]:
     lines = text.split('\n')
 
     for line in lines:
-        # 코드 블록 시작/끝 감지
+        # Detect code block start/end
         if line.strip().startswith('```'):
             if not in_code_block:
-                # 코드 블록 시작
+                # Code block start
                 in_code_block = True
                 code_block_lang = line.strip()[3:]
             else:
-                # 코드 블록 끝
+                # Code block end
                 in_code_block = False
                 code_block_lang = ""
 
-        # 현재 청크에 라인 추가 시 길이 확인
+        # Check length when adding line to current chunk
         test_chunk = current_chunk + line + '\n'
 
         if len(test_chunk) > max_length:
-            # 청크 분리 필요
+            # Chunk split needed
             if in_code_block and current_chunk:
-                # 코드 블록 중이면 일단 닫고
+                # If inside a code block, close it first
                 current_chunk += '```\n'
                 chunks.append(current_chunk.strip())
-                # 새 청크에서 다시 열기
+                # Reopen in new chunk
                 current_chunk = f'```{code_block_lang}\n{line}\n'
             else:
                 chunks.append(current_chunk.strip())
@@ -201,37 +201,37 @@ def split_message(text: str, max_length: int = SLACK_MAX_LENGTH) -> list[str]:
 
 
 # =============================================================================
-# 메인 정제 함수
+# Main cleaning function
 # =============================================================================
 
 def clean_output(raw_text: str) -> Optional[str]:
     """
-    터미널 출력을 슬랙에 보내기 좋게 정제
+    Clean terminal output for sending to Slack.
 
-    1. ANSI 코드 제거
-    2. 노이즈 필터링
-    3. 코드 블록 정리
-    4. 공백 정리
+    1. Remove ANSI codes
+    2. Filter noise
+    3. Clean up code blocks
+    4. Trim whitespace
 
     Returns:
-        정제된 텍스트 또는 None (내용이 없는 경우)
+        Cleaned text or None (if no content)
     """
     if not raw_text:
         return None
 
-    # 1. ANSI 코드 제거
+    # 1. Remove ANSI codes
     text = remove_ansi(raw_text)
 
-    # 2. 노이즈 필터링
+    # 2. Filter noise
     text = filter_noise(text)
 
-    # 3. 코드 블록 정리
+    # 3. Clean up code blocks
     text = fix_code_blocks(text)
 
-    # 4. 앞뒤 공백 정리
+    # 4. Trim leading/trailing whitespace
     text = text.strip()
 
-    # 내용이 있으면 반환
+    # Return if there is content
     if text and len(text) > 0:
         return text
 
@@ -240,10 +240,10 @@ def clean_output(raw_text: str) -> Optional[str]:
 
 def clean_and_split(raw_text: str) -> list[str]:
     """
-    터미널 출력을 정제하고 슬랙 메시지 크기로 분할
+    Clean terminal output and split into Slack message-sized chunks.
 
     Returns:
-        분할된 메시지 리스트 (빈 경우 빈 리스트)
+        List of split messages (empty list if no content)
     """
     cleaned = clean_output(raw_text)
     if not cleaned:
@@ -253,17 +253,17 @@ def clean_and_split(raw_text: str) -> list[str]:
 
 
 # =============================================================================
-# 특수 메시지 감지
+# Special message detection
 # =============================================================================
 
 def detect_tool_use(text: str) -> Optional[dict]:
     """
-    Claude의 도구 사용 감지
+    Detect Claude's tool usage.
 
     Returns:
-        {"tool": "tool_name", "status": "running|completed|error"} 또는 None
+        {"tool": "tool_name", "status": "running|completed|error"} or None
     """
-    # 도구 사용 패턴들
+    # Tool usage patterns
     tool_patterns = [
         (r'(?i)reading\s+file[:\s]+([^\n]+)', 'Read', 'running'),
         (r'(?i)writing\s+to\s+file[:\s]+([^\n]+)', 'Write', 'running'),
@@ -286,7 +286,7 @@ def detect_tool_use(text: str) -> Optional[dict]:
 
 def is_prompt_line(text: str) -> bool:
     """
-    Claude가 입력을 기다리는 프롬프트인지 감지
+    Detect if Claude is waiting for input at a prompt.
     """
     prompt_patterns = [
         r'^\s*>\s*$',

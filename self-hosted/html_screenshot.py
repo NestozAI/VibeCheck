@@ -1,7 +1,7 @@
 """
 HTML to Screenshot Utility
-- HTML/CSS 코드를 이미지로 변환
-- UI 목업 생성에 사용
+- Convert HTML/CSS code to images
+- Used for generating UI mockups
 """
 
 import os
@@ -17,19 +17,19 @@ def html_to_screenshot(
     full_page: bool = False
 ) -> str:
     """
-    HTML 콘텐츠를 스크린샷으로 저장
+    Save HTML content as a screenshot.
 
     Args:
-        html_content: HTML 문자열
-        output_path: 저장할 이미지 경로
-        width: 뷰포트 너비
-        height: 뷰포트 높이
-        full_page: 전체 페이지 캡처 여부
+        html_content: HTML string
+        output_path: Output image path
+        width: Viewport width
+        height: Viewport height
+        full_page: Whether to capture the full page
 
     Returns:
-        저장된 이미지 경로
+        Saved image path
     """
-    # 임시 HTML 파일 생성
+    # Create temporary HTML file
     with tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False) as f:
         f.write(html_content)
         temp_html_path = f.name
@@ -39,13 +39,13 @@ def html_to_screenshot(
             browser = p.chromium.launch(headless=True)
             page = browser.new_page(viewport={'width': width, 'height': height})
 
-            # HTML 파일 로드
+            # Load HTML file
             page.goto(f'file://{temp_html_path}')
 
-            # 잠시 대기 (렌더링 완료)
+            # Wait briefly (for rendering to complete)
             page.wait_for_timeout(500)
 
-            # 스크린샷 저장
+            # Save screenshot
             page.screenshot(path=output_path, full_page=full_page)
 
             browser.close()
@@ -53,7 +53,7 @@ def html_to_screenshot(
         return output_path
 
     finally:
-        # 임시 파일 삭제
+        # Delete temporary file
         os.unlink(temp_html_path)
 
 
@@ -65,29 +65,29 @@ def html_file_to_screenshot(
     full_page: bool = False
 ) -> str:
     """
-    HTML 파일을 스크린샷으로 저장
+    Save an HTML file as a screenshot.
 
     Args:
-        html_path: HTML 파일 경로
-        output_path: 저장할 이미지 경로
-        width: 뷰포트 너비
-        height: 뷰포트 높이
-        full_page: 전체 페이지 캡처 여부
+        html_path: HTML file path
+        output_path: Output image path
+        width: Viewport width
+        height: Viewport height
+        full_page: Whether to capture the full page
 
     Returns:
-        저장된 이미지 경로
+        Saved image path
     """
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
         page = browser.new_page(viewport={'width': width, 'height': height})
 
-        # HTML 파일 로드
+        # Load HTML file
         page.goto(f'file://{os.path.abspath(html_path)}')
 
-        # 잠시 대기 (렌더링 완료)
+        # Wait briefly (for rendering to complete)
         page.wait_for_timeout(500)
 
-        # 스크린샷 저장
+        # Save screenshot
         page.screenshot(path=output_path, full_page=full_page)
 
         browser.close()
@@ -103,26 +103,26 @@ def url_to_screenshot(
     full_page: bool = False
 ) -> str:
     """
-    URL을 스크린샷으로 저장
+    Save a URL as a screenshot.
 
     Args:
-        url: 웹 URL
-        output_path: 저장할 이미지 경로
-        width: 뷰포트 너비
-        height: 뷰포트 높이
-        full_page: 전체 페이지 캡처 여부
+        url: Web URL
+        output_path: Output image path
+        width: Viewport width
+        height: Viewport height
+        full_page: Whether to capture the full page
 
     Returns:
-        저장된 이미지 경로
+        Saved image path
     """
     with sync_playwright() as p:
         browser = p.chromium.launch(headless=True)
         page = browser.new_page(viewport={'width': width, 'height': height})
 
-        # URL 로드
+        # Load URL
         page.goto(url, wait_until='networkidle')
 
-        # 스크린샷 저장
+        # Save screenshot
         page.screenshot(path=output_path, full_page=full_page)
 
         browser.close()
@@ -132,19 +132,19 @@ def url_to_screenshot(
 
 def detect_project_type(project_dir: str) -> dict:
     """
-    프로젝트 타입 감지
+    Detect project type.
 
     Returns:
         {
             "type": "static" | "node" | "python",
             "framework": "react" | "vue" | "next" | "vite" | "flask" | "fastapi" | None,
-            "entry": 파일 또는 명령어,
-            "port": 기본 포트
+            "entry": file or command,
+            "port": default port
         }
     """
     import json as json_module
 
-    # package.json 확인 (Node.js 프로젝트)
+    # Check package.json (Node.js project)
     package_json_path = os.path.join(project_dir, 'package.json')
     if os.path.isfile(package_json_path):
         try:
@@ -166,7 +166,7 @@ def detect_project_type(project_dir: str) -> dict:
             # Vue CLI
             if '@vue/cli-service' in deps:
                 return {"type": "node", "framework": "vue-cli", "cmd": "npm run serve", "port": 8080}
-            # 일반 Node.js (dev 스크립트가 있으면)
+            # Generic Node.js (if dev script exists)
             if 'dev' in scripts:
                 return {"type": "node", "framework": "generic", "cmd": "npm run dev", "port": 3000}
             if 'start' in scripts:
@@ -174,7 +174,7 @@ def detect_project_type(project_dir: str) -> dict:
         except:
             pass
 
-    # Python 프로젝트
+    # Python project
     if os.path.isfile(os.path.join(project_dir, 'requirements.txt')) or \
        os.path.isfile(os.path.join(project_dir, 'pyproject.toml')):
         # FastAPI
@@ -197,11 +197,11 @@ def detect_project_type(project_dir: str) -> dict:
                     if 'streamlit' in f.read().lower():
                         return {"type": "python", "framework": "streamlit", "cmd": f"streamlit run {py_file}", "port": 8501}
 
-    # 정적 HTML
+    # Static HTML
     if os.path.isfile(os.path.join(project_dir, 'index.html')):
         return {"type": "static", "framework": None, "entry": os.path.join(project_dir, 'index.html'), "port": None}
 
-    # HTML 파일 찾기
+    # Find HTML files
     html_files = [f for f in os.listdir(project_dir) if f.endswith('.html')]
     if html_files:
         return {"type": "static", "framework": None, "entry": os.path.join(project_dir, html_files[0]), "port": None}
@@ -218,20 +218,20 @@ def screenshot_project(
     timeout: int = 30
 ) -> str:
     """
-    프로젝트 타입에 따라 적절한 방식으로 스크린샷 생성
+    Generate screenshot based on project type.
 
-    - static: HTML 파일 직접 스크린샷
-    - node/python: dev 서버 실행 후 localhost 스크린샷
+    - static: Direct screenshot of HTML file
+    - node/python: Start dev server then screenshot localhost
     """
     import subprocess
     import time
     import signal
 
     project_info = detect_project_type(project_dir)
-    print(f"프로젝트 타입 감지: {project_info}")
+    print(f"Project type detected: {project_info}")
 
     if project_info["type"] == "static":
-        # 정적 HTML 파일 스크린샷
+        # Static HTML file screenshot
         return html_file_to_screenshot(
             project_info["entry"],
             output_path,
@@ -241,25 +241,25 @@ def screenshot_project(
         )
 
     elif project_info["type"] in ["node", "python"]:
-        # dev 서버 실행
+        # Start dev server
         cmd = project_info["cmd"]
         port = project_info["port"]
         url = f"http://localhost:{port}"
 
-        print(f"Dev 서버 시작: {cmd}")
+        print(f"Starting dev server: {cmd}")
 
-        # 서버 프로세스 시작
+        # Start server process
         process = subprocess.Popen(
             cmd,
             shell=True,
             cwd=project_dir,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
-            preexec_fn=os.setsid  # 프로세스 그룹 생성
+            preexec_fn=os.setsid  # Create process group
         )
 
         try:
-            # 서버가 준비될 때까지 대기
+            # Wait until server is ready
             import socket
             start_time = time.time()
             while time.time() - start_time < timeout:
@@ -268,16 +268,16 @@ def screenshot_project(
                     result = sock.connect_ex(('localhost', port))
                     sock.close()
                     if result == 0:
-                        print(f"서버 준비됨: {url}")
-                        time.sleep(2)  # 렌더링 완료 대기
+                        print(f"Server ready: {url}")
+                        time.sleep(2)  # Wait for rendering to complete
                         break
                 except:
                     pass
                 time.sleep(1)
             else:
-                raise TimeoutError(f"서버가 {timeout}초 내에 시작되지 않음")
+                raise TimeoutError(f"Server did not start within {timeout} seconds")
 
-            # 스크린샷 촬영
+            # Take screenshot
             return url_to_screenshot(
                 url,
                 output_path,
@@ -287,18 +287,18 @@ def screenshot_project(
             )
 
         finally:
-            # 서버 프로세스 종료
+            # Terminate server process
             try:
                 os.killpg(os.getpgid(process.pid), signal.SIGTERM)
-                print("Dev 서버 종료됨")
+                print("Dev server terminated")
             except:
                 pass
 
     else:
-        raise ValueError(f"지원하지 않는 프로젝트 타입: {project_info['type']}")
+        raise ValueError(f"Unsupported project type: {project_info['type']}")
 
 
-# 테스트
+# Test
 if __name__ == "__main__":
     test_html = """
     <!DOCTYPE html>

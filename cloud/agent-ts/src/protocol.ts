@@ -54,7 +54,7 @@ export interface SessionUpdateMessage {
 
 /**
  * Real-time tool usage status — sent while Claude is actively using a tool.
- * Lets the web UI show "파일 읽는 중...", "코드 수정 중..." etc.
+ * Lets the web UI show "Reading file...", "Editing code..." etc.
  */
 export interface ToolStatusMessage {
   type: "tool_status";

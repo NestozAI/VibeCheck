@@ -25,9 +25,9 @@ const opts = program.opts<{
 const workDir = path.resolve(opts.dir);
 
 console.log("=== VibeCheck Agent (TypeScript + Claude Agent SDK) ===");
-console.log(`작업 디렉토리: ${workDir}`);
-console.log(`서버: ${opts.server}`);
-console.log(`새 세션: ${opts.newSession}`);
+console.log(`Working directory: ${workDir}`);
+console.log(`Server: ${opts.server}`);
+console.log(`New session: ${opts.newSession}`);
 console.log("");
 
 const agent = new VibeAgent(opts.key, workDir, opts.server, opts.newSession);
@@ -42,15 +42,15 @@ async function main(): Promise<void> {
         (error.message.includes("SIGINT") ||
           error.message.includes("SIGTERM"))
       ) {
-        console.log("\n[agent] 종료합니다.");
+        console.log("\n[agent] Shutting down.");
         process.exit(0);
       }
       console.error(
-        `[agent] 연결 실패: ${error instanceof Error ? error.message : error}`,
+        `[agent] Connection failed: ${error instanceof Error ? error.message : error}`,
       );
     }
     console.log(
-      `[agent] ${RECONNECT_DELAY_MS / 1000}초 후 재연결 시도...`,
+      `[agent] Reconnecting in ${RECONNECT_DELAY_MS / 1000}s...`,
     );
     await new Promise((r) => setTimeout(r, RECONNECT_DELAY_MS));
   }
@@ -58,16 +58,16 @@ async function main(): Promise<void> {
 
 // Graceful shutdown
 process.on("SIGINT", () => {
-  console.log("\n[agent] SIGINT 수신. 종료합니다.");
+  console.log("\n[agent] SIGINT received. Shutting down.");
   process.exit(0);
 });
 
 process.on("SIGTERM", () => {
-  console.log("\n[agent] SIGTERM 수신. 종료합니다.");
+  console.log("\n[agent] SIGTERM received. Shutting down.");
   process.exit(0);
 });
 
 main().catch((e) => {
-  console.error("[agent] 치명적 오류:", e);
+  console.error("[agent] Fatal error:", e);
   process.exit(1);
 });

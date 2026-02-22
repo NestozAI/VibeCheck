@@ -233,7 +233,7 @@ export async function htmlFileToScreenshot(
     await browser.close();
     return outputPath;
   } catch (e) {
-    console.error("[screenshot] HTML 스크린샷 실패:", e);
+    console.error("[screenshot] HTML screenshot failed:", e);
     return null;
   }
 }
@@ -266,7 +266,7 @@ export async function screenshotProject(
       info.type === "node" &&
       !existsSync(path.join(projectDir, "node_modules"))
     ) {
-      console.log("[screenshot] npm install 실행 중...");
+      console.log("[screenshot] Running npm install...");
       execSync("npm install", {
         cwd: projectDir,
         timeout: 60_000,
@@ -286,7 +286,7 @@ export async function screenshotProject(
     // Wait for port to open
     const portReady = await waitForPort(info.port, 30_000);
     if (!portReady) {
-      console.warn("[screenshot] 서버 시작 타임아웃 (30초)");
+      console.warn("[screenshot] Server start timeout (30s)");
       return null;
     }
 
@@ -305,11 +305,11 @@ export async function screenshotProject(
       await browser.close();
       return outputPath;
     } catch (e) {
-      console.error("[screenshot] 스크린샷 캡처 실패:", e);
+      console.error("[screenshot] Screenshot capture failed:", e);
       return null;
     }
   } catch (e) {
-    console.error("[screenshot] 프로젝트 스크린샷 실패:", e);
+    console.error("[screenshot] Project screenshot failed:", e);
     return null;
   } finally {
     // Kill dev server process group

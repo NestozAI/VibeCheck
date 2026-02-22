@@ -44,7 +44,7 @@ function saveTasks(tasks: ScheduledTask[]): void {
         if (!existsSync(SESSION_DIR)) mkdirSync(SESSION_DIR, { recursive: true });
         writeFileSync(SCHEDULE_FILE, JSON.stringify(tasks, null, 2));
     } catch (e) {
-        console.error("[scheduler] 태스크 저장 실패:", e);
+        console.error("[scheduler] Failed to save tasks:", e);
     }
 }
 
@@ -72,7 +72,7 @@ export class TaskScheduler {
             if (task.enabled) this.scheduleJob(task);
         }
         console.log(
-            `[scheduler] ${this.tasks.filter((t) => t.enabled).length}개 태스크 활성화`,
+            `[scheduler] ${this.tasks.filter((t) => t.enabled).length} tasks activated`,
         );
     }
 
@@ -90,7 +90,7 @@ export class TaskScheduler {
         skillId?: string,
     ): ScheduledTask | { error: string } {
         if (!cron.validate(cronExpr)) {
-            return { error: `유효하지 않은 cron 표현식: "${cronExpr}"` };
+            return { error: `Invalid cron expression: "${cronExpr}"` };
         }
 
         const task: ScheduledTask = {
@@ -106,7 +106,7 @@ export class TaskScheduler {
         saveTasks(this.tasks);
         this.scheduleJob(task);
 
-        console.log(`[scheduler] 태스크 추가: ${task.id.slice(0, 8)} "${message.slice(0, 40)}"`);
+        console.log(`[scheduler] Task added: ${task.id.slice(0, 8)} "${message.slice(0, 40)}"`);
         return task;
     }
 
@@ -118,7 +118,7 @@ export class TaskScheduler {
         this.cronJobs.delete(id);
         this.tasks.splice(idx, 1);
         saveTasks(this.tasks);
-        console.log(`[scheduler] 태스크 삭제: ${id.slice(0, 8)}`);
+        console.log(`[scheduler] Task removed: ${id.slice(0, 8)}`);
         return true;
     }
 
@@ -148,14 +148,14 @@ export class TaskScheduler {
         this.cronJobs.get(task.id)?.stop();
 
         const job = cron.schedule(task.cron, async () => {
-            console.log(`[scheduler] 태스크 실행: "${task.message.slice(0, 40)}"`);
+            console.log(`[scheduler] Task fired: "${task.message.slice(0, 40)}"`);
             task.last_run = new Date().toISOString();
             saveTasks(this.tasks);
 
             try {
                 await this.onTaskFire?.(task);
             } catch (e) {
-                console.error("[scheduler] 태스크 실행 오류:", e);
+                console.error("[scheduler] Task execution error:", e);
             }
         });
 

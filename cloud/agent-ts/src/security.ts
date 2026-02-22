@@ -28,7 +28,7 @@ export class SecurityManager {
   addTrustedPath(p: string): void {
     const normalized = path.resolve(p);
     this.trustedPaths.add(normalized);
-    console.log(`[security] 신뢰 경로 추가: ${normalized}`);
+    console.log(`[security] Trusted path added: ${normalized}`);
   }
 
   isPathTrusted(p: string): boolean {
@@ -112,7 +112,7 @@ export class SecurityManager {
       }
       resolve({ behavior: "allow", updatedInput: input });
     } else {
-      resolve({ behavior: "deny", message: "사용자가 거부했습니다" });
+      resolve({ behavior: "deny", message: "User denied the request" });
     }
     this.pendingApproval = null;
   }

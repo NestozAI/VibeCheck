@@ -1,25 +1,25 @@
 #!/bin/bash
 
 # =============================================================================
-# VibeCheck - 설치 스크립트
+# VibeCheck - Setup Script
 # =============================================================================
 
 set -e
 
 echo ""
 echo "=========================================="
-echo "  VibeCheck 설치"
+echo "  VibeCheck Setup"
 echo "=========================================="
 echo ""
 
-# 색상 정의
+# Color definitions
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
-# 현재 디렉토리 확인
+# Check current directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
@@ -27,10 +27,10 @@ VENV_DIR=".venv"
 CONDA_ENV="vibecheck"
 
 # =============================================================================
-# Python 확인
+# Check Python
 # =============================================================================
 
-echo -e "${BLUE}[1/5]${NC} Python 확인..."
+echo -e "${BLUE}[1/5]${NC} Checking Python..."
 
 PYTHON_CMD=""
 for cmd in python3 python; do
@@ -46,82 +46,82 @@ for cmd in python3 python; do
 done
 
 if [ -z "$PYTHON_CMD" ]; then
-    echo -e "${RED}Error: Python 3.8+ 이 필요합니다.${NC}"
-    echo "Python을 설치해주세요: https://www.python.org/downloads/"
+    echo -e "${RED}Error: Python 3.8+ is required.${NC}"
+    echo "Please install Python: https://www.python.org/downloads/"
     exit 1
 fi
 
-echo -e "  ${GREEN}$($PYTHON_CMD --version) 발견${NC}"
+echo -e "  ${GREEN}$($PYTHON_CMD --version) found${NC}"
 
 # =============================================================================
-# 가상환경 생성 (venv → conda → 시스템 pip 순서)
+# Create virtual environment (venv -> conda -> system pip order)
 # =============================================================================
 
 echo ""
-echo -e "${BLUE}[2/5]${NC} 가상환경 설정..."
+echo -e "${BLUE}[2/5]${NC} Setting up virtual environment..."
 
 ENV_MODE=""  # "venv", "conda", or "system"
 ACTIVATE_CMD=""
 
-# --- 1) venv 시도 ---
+# --- 1) Try venv ---
 if [ -d "$VENV_DIR" ]; then
-    echo -e "  ${YELLOW}기존 venv 환경 발견, 재사용합니다.${NC}"
+    echo -e "  ${YELLOW}Existing venv environment found, reusing.${NC}"
     source "$VENV_DIR/bin/activate"
     ENV_MODE="venv"
     ACTIVATE_CMD="source $VENV_DIR/bin/activate"
 else
     if "$PYTHON_CMD" -m venv "$VENV_DIR" 2>/dev/null; then
-        echo -e "  ${GREEN}venv 환경 생성 완료${NC}"
+        echo -e "  ${GREEN}venv environment created${NC}"
         source "$VENV_DIR/bin/activate"
         ENV_MODE="venv"
         ACTIVATE_CMD="source $VENV_DIR/bin/activate"
     else
-        echo -e "  ${YELLOW}venv 사용 불가${NC}"
+        echo -e "  ${YELLOW}venv unavailable${NC}"
 
-        # Ubuntu/Debian에서 python3-venv 누락 안내
+        # Hint for missing python3-venv on Ubuntu/Debian
         if command -v apt &> /dev/null; then
-            echo -e "  ${YELLOW}힌트: sudo apt install python3-venv 로 설치 가능${NC}"
+            echo -e "  ${YELLOW}Hint: install with sudo apt install python3-venv${NC}"
         fi
 
-        # --- 2) conda 폴백 ---
+        # --- 2) conda fallback ---
         if command -v conda &> /dev/null; then
-            echo -e "  ${BLUE}conda로 폴백 시도...${NC}"
+            echo -e "  ${BLUE}Falling back to conda...${NC}"
             if conda env list 2>/dev/null | grep -q "^$CONDA_ENV "; then
-                echo -e "  ${YELLOW}기존 conda 환경 발견, 재사용합니다.${NC}"
+                echo -e "  ${YELLOW}Existing conda environment found, reusing.${NC}"
             else
                 if conda create -n "$CONDA_ENV" python=3.11 -y 2>/dev/null; then
-                    echo -e "  ${GREEN}conda 환경 생성 완료${NC}"
+                    echo -e "  ${GREEN}conda environment created${NC}"
                 else
-                    echo -e "  ${YELLOW}conda 환경 생성 실패${NC}"
+                    echo -e "  ${YELLOW}conda environment creation failed${NC}"
                 fi
             fi
 
-            # conda 활성화 시도
+            # Try activating conda
             if eval "$(conda shell.bash hook 2>/dev/null)" && conda activate "$CONDA_ENV" 2>/dev/null; then
                 ENV_MODE="conda"
                 ACTIVATE_CMD="conda activate $CONDA_ENV"
             else
-                echo -e "  ${YELLOW}conda 활성화 실패${NC}"
+                echo -e "  ${YELLOW}conda activation failed${NC}"
             fi
         fi
 
-        # --- 3) 시스템 pip 폴백 ---
+        # --- 3) System pip fallback ---
         if [ -z "$ENV_MODE" ]; then
-            echo -e "  ${YELLOW}⚠ 가상환경 없이 시스템 pip에 직접 설치합니다.${NC}"
+            echo -e "  ${YELLOW}⚠ Installing directly to system pip without virtual environment.${NC}"
             ENV_MODE="system"
             ACTIVATE_CMD=""
         fi
     fi
 fi
 
-echo -e "  ${GREEN}환경 모드: ${ENV_MODE}${NC}"
+echo -e "  ${GREEN}Environment mode: ${ENV_MODE}${NC}"
 
 # =============================================================================
-# 의존성 설치
+# Install dependencies
 # =============================================================================
 
 echo ""
-echo -e "${BLUE}[3/5]${NC} 의존성 설치..."
+echo -e "${BLUE}[3/5]${NC} Installing dependencies..."
 
 PIP_FLAGS="-q"
 if [ "$ENV_MODE" = "system" ]; then
@@ -131,63 +131,63 @@ fi
 pip install --upgrade pip $PIP_FLAGS
 pip install -r requirements.txt $PIP_FLAGS
 
-echo -e "  ${GREEN}패키지 설치 완료${NC}"
+echo -e "  ${GREEN}Package installation complete${NC}"
 
 # =============================================================================
-# Playwright 브라우저 설치
+# Install Playwright browser
 # =============================================================================
 
 echo ""
-echo -e "${BLUE}[4/5]${NC} Playwright 브라우저 설치 (UI 스크린샷용)..."
+echo -e "${BLUE}[4/5]${NC} Installing Playwright browser (for UI screenshots)..."
 
 playwright install chromium --with-deps 2>/dev/null || playwright install chromium 2>/dev/null || \
-    echo -e "  ${YELLOW}Playwright 설치 건너뜀 (스크린샷 기능 사용 불가)${NC}"
+    echo -e "  ${YELLOW}Playwright installation skipped (screenshot feature unavailable)${NC}"
 
-echo -e "  ${GREEN}완료${NC}"
+echo -e "  ${GREEN}Done${NC}"
 
 # =============================================================================
-# 환경변수 설정
+# Configure environment variables
 # =============================================================================
 
 echo ""
-echo -e "${BLUE}[5/5]${NC} Slack 연동 설정"
+echo -e "${BLUE}[5/5]${NC} Slack integration setup"
 echo ""
 echo "=========================================="
-echo "  Slack App 토큰이 필요합니다."
-echo "  https://api.slack.com/apps 에서 발급받으세요."
+echo "  Slack App tokens are required."
+echo "  Get them at https://api.slack.com/apps"
 echo "=========================================="
 echo ""
 
-# Bot Token 입력
-echo "Slack Bot Token (xoxb-로 시작)"
+# Bot Token input
+echo "Slack Bot Token (starts with xoxb-)"
 read -p "  Bot Token: " BOT_TOKEN
 while [ -z "$BOT_TOKEN" ]; do
-    echo "  필수 입력값입니다."
+    echo "  This is a required field."
     read -p "  Bot Token: " BOT_TOKEN
 done
 
 echo ""
 
-# App Token 입력
-echo "Slack App Token (xapp-로 시작, Socket Mode용)"
+# App Token input
+echo "Slack App Token (starts with xapp-, for Socket Mode)"
 read -p "  App Token: " APP_TOKEN
 while [ -z "$APP_TOKEN" ]; do
-    echo "  필수 입력값입니다."
+    echo "  This is a required field."
     read -p "  App Token: " APP_TOKEN
 done
 
 echo ""
 
-# 작업 디렉토리 입력
+# Working directory input
 DEFAULT_DIR=$(pwd)
-echo "작업할 디렉토리 경로"
-read -p "  작업 디렉토리 [$DEFAULT_DIR]: " WORK_DIR
+echo "Working directory path"
+read -p "  Working directory [$DEFAULT_DIR]: " WORK_DIR
 WORK_DIR=${WORK_DIR:-$DEFAULT_DIR}
 
-# .env 파일 생성
+# Generate .env file
 cat > .env << EOF
-# VibeCheck 환경설정
-# 자동 생성됨
+# VibeCheck configuration
+# Auto-generated
 
 SLACK_BOT_TOKEN=$BOT_TOKEN
 SLACK_APP_TOKEN=$APP_TOKEN
@@ -195,25 +195,25 @@ WORK_DIR=$WORK_DIR
 EOF
 
 echo ""
-echo -e "${GREEN}.env 파일이 생성되었습니다.${NC}"
+echo -e "${GREEN}.env file has been created.${NC}"
 
 # =============================================================================
-# 완료
+# Complete
 # =============================================================================
 
 echo ""
 echo "=========================================="
-echo -e "  ${GREEN}설치 완료!${NC}"
+echo -e "  ${GREEN}Setup complete!${NC}"
 echo "=========================================="
 echo ""
-echo "실행 방법:"
+echo "How to run:"
 echo ""
 if [ -n "$ACTIVATE_CMD" ]; then
     echo -e "  ${YELLOW}${ACTIVATE_CMD}${NC}"
 fi
 echo -e "  ${YELLOW}python main.py${NC}"
 echo ""
-echo "또는 한 줄로:"
+echo "Or in one line:"
 echo ""
 echo -e "  ${YELLOW}./run.sh${NC}"
 echo ""

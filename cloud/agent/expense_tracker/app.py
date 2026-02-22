@@ -8,18 +8,18 @@ from database import (
 )
 from charts import create_category_pie_chart, create_daily_bar_chart, format_currency
 
-# 페이지 설정
+# Page configuration
 st.set_page_config(
-    page_title="가계부",
+    page_title="Expense Tracker",
     page_icon="💰",
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# 커스텀 CSS - 다크모드
+# Custom CSS - dark mode
 st.markdown("""
 <style>
-    /* 다크모드 기본 설정 */
+    /* Dark mode base settings */
     .stApp {
         background-color: #0a0a0a;
     }
@@ -45,7 +45,7 @@ st.markdown("""
         margin-bottom: 2rem;
     }
 
-    /* 메트릭 카드 스타일 */
+    /* Metric card style */
     [data-testid="stMetric"] {
         background-color: #1a1a1a;
         padding: 1.5rem;
@@ -100,7 +100,7 @@ st.markdown("""
         box-shadow: 0 0 15px rgba(0, 255, 136, 0.4);
     }
 
-    /* 입력 필드 다크모드 */
+    /* Input field dark mode */
     .stTextInput > div > div > input,
     .stNumberInput > div > div > input,
     .stSelectbox > div > div,
@@ -110,12 +110,12 @@ st.markdown("""
         border-color: #444 !important;
     }
 
-    /* 구분선 */
+    /* Divider */
     hr {
         border-color: #333 !important;
     }
 
-    /* 데이터프레임 다크모드 */
+    /* Dataframe dark mode */
     .stDataFrame {
         background-color: #1a1a1a;
     }
@@ -124,13 +124,13 @@ st.markdown("""
         background-color: #1a1a1a;
     }
 
-    /* expander 스타일 */
+    /* Expander style */
     .streamlit-expanderHeader {
         background-color: #1a1a1a !important;
         color: #e0e0e0 !important;
     }
 
-    /* 일반 텍스트 색상 */
+    /* General text color */
     .stMarkdown, p, span, label {
         color: #e0e0e0 !important;
     }
@@ -141,86 +141,86 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# 샘플 데이터 추가 (처음 실행 시)
+# Add sample data (on first run)
 add_sample_data()
 
-# 현재 날짜
+# Current date
 today = date.today()
 current_year = today.year
 current_month = today.month
 
 # =====================
-# 사이드바: 거래 입력
+# Sidebar: Transaction input
 # =====================
 with st.sidebar:
-    st.markdown("### 💳 새 거래 추가")
+    st.markdown("### 💳 Add New Transaction")
 
     with st.form("add_expense_form", clear_on_submit=True):
         expense_date = st.date_input(
-            "날짜",
+            "Date",
             value=today,
             max_value=today
         )
 
         amount = st.number_input(
-            "금액 (원)",
+            "Amount (KRW)",
             min_value=0,
             step=100,
             value=0
         )
 
         category = st.selectbox(
-            "카테고리",
+            "Category",
             options=CATEGORIES
         )
 
         description = st.text_input(
-            "메모 (선택)",
-            placeholder="예: 점심 식사"
+            "Note (optional)",
+            placeholder="e.g., Lunch"
         )
 
-        submitted = st.form_submit_button("➕ 추가하기", use_container_width=True)
+        submitted = st.form_submit_button("➕ Add", use_container_width=True)
 
         if submitted:
             if amount > 0:
                 add_expense(expense_date, amount, category, description)
-                st.success(f"✅ {format_currency(amount)} 추가됨!")
+                st.success(f"✅ {format_currency(amount)} added!")
                 st.rerun()
             else:
-                st.error("금액을 입력해주세요")
+                st.error("Please enter an amount")
 
     st.divider()
 
-    # 월 선택
-    st.markdown("### 📅 조회 기간")
+    # Month selection
+    st.markdown("### 📅 View Period")
     col1, col2 = st.columns(2)
     with col1:
         selected_year = st.selectbox(
-            "년도",
+            "Year",
             options=list(range(2020, today.year + 1)),
             index=today.year - 2020
         )
     with col2:
         selected_month = st.selectbox(
-            "월",
+            "Month",
             options=list(range(1, 13)),
             index=today.month - 1
         )
 
 # =====================
-# 메인 대시보드
+# Main dashboard
 # =====================
-st.markdown('<p class="main-header">💰 가계부</p>', unsafe_allow_html=True)
-st.markdown(f'<p class="sub-header">{selected_year}년 {selected_month}월 지출 현황</p>', unsafe_allow_html=True)
+st.markdown('<p class="main-header">💰 Expense Tracker</p>', unsafe_allow_html=True)
+st.markdown(f'<p class="sub-header">Expense Overview for {selected_year}/{selected_month}</p>', unsafe_allow_html=True)
 
-# 데이터 로드
+# Load data
 monthly_total = get_monthly_total(selected_year, selected_month)
 category_data = get_category_totals(selected_year, selected_month)
 daily_data = get_daily_totals(selected_year, selected_month)
 recent_expenses = get_recent_expenses(10)
 month_expenses = get_expenses_by_month(selected_year, selected_month)
 
-# 일 평균 계산
+# Calculate daily average
 if selected_year == today.year and selected_month == today.month:
     days_passed = today.day
 else:
@@ -230,87 +230,87 @@ else:
 daily_average = monthly_total / days_passed if days_passed > 0 else 0
 
 # =====================
-# 요약 지표
+# Summary metrics
 # =====================
 col1, col2, col3 = st.columns(3)
 
 with col1:
     st.metric(
-        label="📊 이번 달 총 지출",
+        label="📊 Total Monthly Expenses",
         value=format_currency(monthly_total)
     )
 
 with col2:
     st.metric(
-        label="📈 일 평균 지출",
+        label="📈 Daily Average",
         value=format_currency(daily_average)
     )
 
 with col3:
     st.metric(
-        label="🧾 거래 건수",
-        value=f"{len(month_expenses)}건"
+        label="🧾 Transaction Count",
+        value=f"{len(month_expenses)} transactions"
     )
 
 st.divider()
 
 # =====================
-# 차트 영역
+# Chart area
 # =====================
 chart_col1, chart_col2 = st.columns(2)
 
 with chart_col1:
-    # 카테고리별 파이차트
+    # Category pie chart
     pie_chart = create_category_pie_chart(category_data)
     st.plotly_chart(pie_chart, use_container_width=True)
 
 with chart_col2:
-    # 일별 막대그래프
+    # Daily bar chart
     bar_chart = create_daily_bar_chart(daily_data, selected_year, selected_month)
     st.plotly_chart(bar_chart, use_container_width=True)
 
 st.divider()
 
 # =====================
-# 최근 거래 목록
+# Recent transaction list
 # =====================
-st.markdown("### 📋 최근 거래 내역")
+st.markdown("### 📋 Recent Transactions")
 
 if recent_expenses:
-    # 테이블 형식으로 표시
+    # Display in table format
     df = pd.DataFrame(recent_expenses)
     df['date'] = pd.to_datetime(df['date']).dt.strftime('%m/%d')
     df['amount'] = df['amount'].apply(lambda x: format_currency(x))
 
-    # 컬럼 이름 변경
+    # Rename columns
     df = df.rename(columns={
-        'date': '날짜',
-        'category': '카테고리',
-        'description': '메모',
-        'amount': '금액'
+        'date': 'Date',
+        'category': 'Category',
+        'description': 'Note',
+        'amount': 'Amount'
     })
 
-    # 표시할 컬럼만 선택
-    display_df = df[['날짜', '카테고리', '메모', '금액']]
+    # Select columns to display
+    display_df = df[['Date', 'Category', 'Note', 'Amount']]
 
     st.dataframe(
         display_df,
         use_container_width=True,
         hide_index=True,
         column_config={
-            "날짜": st.column_config.TextColumn(width="small"),
-            "카테고리": st.column_config.TextColumn(width="small"),
-            "메모": st.column_config.TextColumn(width="medium"),
-            "금액": st.column_config.TextColumn(width="small"),
+            "Date": st.column_config.TextColumn(width="small"),
+            "Category": st.column_config.TextColumn(width="small"),
+            "Note": st.column_config.TextColumn(width="medium"),
+            "Amount": st.column_config.TextColumn(width="small"),
         }
     )
 else:
-    st.info("아직 거래 내역이 없습니다. 사이드바에서 새 거래를 추가해보세요!")
+    st.info("No transactions yet. Add a new transaction from the sidebar!")
 
 # =====================
-# 이번 달 전체 내역 (확장 가능)
+# Full monthly history (expandable)
 # =====================
-with st.expander(f"📑 {selected_month}월 전체 내역 보기 ({len(month_expenses)}건)"):
+with st.expander(f"📑 View All Month {selected_month} Transactions ({len(month_expenses)} items)"):
     if month_expenses:
         full_df = pd.DataFrame(month_expenses)
         full_df['date'] = pd.to_datetime(full_df['date']).dt.strftime('%Y-%m-%d')
@@ -318,13 +318,13 @@ with st.expander(f"📑 {selected_month}월 전체 내역 보기 ({len(month_exp
 
         full_df = full_df.rename(columns={
             'id': 'ID',
-            'date': '날짜',
-            'category': '카테고리',
-            'description': '메모',
-            'amount': '금액'
+            'date': 'Date',
+            'category': 'Category',
+            'description': 'Note',
+            'amount': 'Amount'
         })
 
-        display_full_df = full_df[['ID', '날짜', '카테고리', '메모', '금액']]
+        display_full_df = full_df[['ID', 'Date', 'Category', 'Note', 'Amount']]
 
         st.dataframe(
             display_full_df,
@@ -332,24 +332,24 @@ with st.expander(f"📑 {selected_month}월 전체 내역 보기 ({len(month_exp
             hide_index=True
         )
 
-        # 거래 삭제 기능
+        # Delete transaction feature
         st.markdown("---")
-        st.markdown("**거래 삭제**")
-        delete_id = st.number_input("삭제할 거래 ID", min_value=1, step=1)
-        if st.button("🗑️ 삭제", type="secondary"):
+        st.markdown("**Delete Transaction**")
+        delete_id = st.number_input("Transaction ID to delete", min_value=1, step=1)
+        if st.button("🗑️ Delete", type="secondary"):
             if delete_expense(delete_id):
-                st.success("거래가 삭제되었습니다.")
+                st.success("Transaction has been deleted.")
                 st.rerun()
             else:
-                st.error("해당 ID의 거래를 찾을 수 없습니다.")
+                st.error("Transaction with that ID not found.")
     else:
-        st.info("이번 달 거래 내역이 없습니다.")
+        st.info("No transactions this month.")
 
-# 푸터
+# Footer
 st.markdown("---")
 st.markdown(
     "<div style='text-align: center; color: #888; font-size: 0.8rem;'>"
-    "💰 가계부 앱 | Made with Streamlit"
+    "💰 Expense Tracker App | Made with Streamlit"
     "</div>",
     unsafe_allow_html=True
 )

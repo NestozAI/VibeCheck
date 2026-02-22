@@ -31,9 +31,9 @@ export const DEFAULT_SKILLS: Skill[] = [
 
     {
         id: "research",
-        name: "리서치 에이전트",
+        name: "Research Agent",
         icon: "🔭",
-        description: "읽기 전용 — 코드 분석, 문서 검색, 정보 수집에 최적화",
+        description: "Read-only — optimized for code analysis, documentation search, and information gathering",
         systemPrompt:
             "You are a research agent. You ONLY read and analyse — never modify files. " +
             "Provide detailed, well-structured summaries and insights.",
@@ -41,9 +41,9 @@ export const DEFAULT_SKILLS: Skill[] = [
     },
     {
         id: "coding",
-        name: "코딩 에이전트",
+        name: "Coding Agent",
         icon: "💻",
-        description: "파일 수정 가능 — 코딩, 리팩터링, 버그 수정에 최적화",
+        description: "File modification enabled — optimized for coding, refactoring, and bug fixes",
         systemPrompt:
             "You are an expert software engineer. Write clean, well-tested, idiomatic code. " +
             "Explain every change you make.",
@@ -54,9 +54,9 @@ export const DEFAULT_SKILLS: Skill[] = [
 
     {
         id: "code-review",
-        name: "코드 리뷰",
+        name: "Code Review",
         icon: "🔍",
-        description: "코드 품질, 버그, 보안 이슈, 모범 사례 점검",
+        description: "Code quality, bug, security, and best practices inspection",
         systemPrompt:
             "You are a senior code reviewer. Focus on: bugs, security vulnerabilities, " +
             "performance, readability, and adherence to best practices. " +
@@ -65,9 +65,9 @@ export const DEFAULT_SKILLS: Skill[] = [
     },
     {
         id: "test-runner",
-        name: "테스트 실행",
+        name: "Test Runner",
         icon: "🧪",
-        description: "테스트 스위트 실행 후 결과 요약",
+        description: "Run test suite and summarize results",
         systemPrompt:
             "Run the project's test suite and provide a concise summary: total / passed / failed. " +
             "For each failing test, show the error and suggest a fix.",
@@ -75,9 +75,9 @@ export const DEFAULT_SKILLS: Skill[] = [
     },
     {
         id: "dependency-audit",
-        name: "의존성 감사",
+        name: "Dependency Audit",
         icon: "📦",
-        description: "오래된 패키지·취약점 확인 및 업데이트 제안",
+        description: "Check for outdated packages and vulnerabilities, suggest updates",
         systemPrompt:
             "Audit all project dependencies. Check for outdated packages and known vulnerabilities. " +
             "Present results in a table and suggest specific update commands.",
@@ -85,9 +85,9 @@ export const DEFAULT_SKILLS: Skill[] = [
     },
     {
         id: "git-summary",
-        name: "Git 요약",
+        name: "Git Summary",
         icon: "📋",
-        description: "최근 커밋 및 변경 사항 요약",
+        description: "Summarize recent commits and changes",
         systemPrompt:
             "Summarise recent git history and staged changes in plain Korean. " +
             "Highlight the most important changes and any potential issues.",
@@ -95,9 +95,9 @@ export const DEFAULT_SKILLS: Skill[] = [
     },
     {
         id: "doc-writer",
-        name: "문서 작성",
+        name: "Doc Writer",
         icon: "📝",
-        description: "README, API 문서, 주석 자동 작성",
+        description: "Auto-generate README, API docs, and comments",
         systemPrompt:
             "You are a technical writer. Generate clear, concise documentation in Korean (or English if the codebase is English). " +
             "Follow existing documentation style when present.",

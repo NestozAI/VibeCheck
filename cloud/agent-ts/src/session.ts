@@ -31,9 +31,9 @@ export function saveSessionId(workDir: string, sessionId: string): void {
       updated_at: new Date().toISOString(),
     };
     writeFileSync(getSessionFilePath(workDir), JSON.stringify(data, null, 2));
-    console.log(`[session] 세션 ID 저장: ${sessionId.slice(0, 20)}...`);
+    console.log(`[session] Session ID saved: ${sessionId.slice(0, 20)}...`);
   } catch (e) {
-    console.error(`[session] 세션 ID 저장 실패:`, e);
+    console.error(`[session] Failed to save session ID:`, e);
   }
 }
 
@@ -45,7 +45,7 @@ export function loadSessionId(workDir: string): string | null {
     const data: SessionData = JSON.parse(raw);
     if (data.session_id && path.resolve(data.work_dir) === path.resolve(workDir)) {
       console.log(
-        `[session] 세션 ID 로드: ${data.session_id.slice(0, 20)}...`,
+        `[session] Session ID loaded: ${data.session_id.slice(0, 20)}...`,
       );
       return data.session_id;
     }
@@ -60,7 +60,7 @@ export function clearSessionId(workDir: string): void {
     const filePath = getSessionFilePath(workDir);
     if (existsSync(filePath)) {
       unlinkSync(filePath);
-      console.log("[session] 세션 ID 삭제됨");
+      console.log("[session] Session ID cleared");
     }
   } catch {
     // ignore

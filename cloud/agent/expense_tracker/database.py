@@ -6,26 +6,26 @@ import os
 DB_PATH = os.path.join(os.path.dirname(__file__), "expenses.db")
 
 CATEGORIES = [
-    "식비",
-    "교통",
-    "쇼핑",
-    "문화/여가",
-    "공과금",
-    "의료",
-    "교육",
-    "기타"
+    "Food",
+    "Transportation",
+    "Shopping",
+    "Culture/Leisure",
+    "Utilities",
+    "Medical",
+    "Education",
+    "Other"
 ]
 
 
 def get_connection():
-    """SQLite 데이터베이스 연결"""
+    """SQLite database connection"""
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     return conn
 
 
 def init_db():
-    """데이터베이스 초기화 및 테이블 생성"""
+    """Initialize database and create tables"""
     conn = get_connection()
     cursor = conn.cursor()
 
@@ -45,7 +45,7 @@ def init_db():
 
 
 def add_expense(expense_date: date, amount: float, category: str, description: str = "") -> int:
-    """새 거래 추가"""
+    """Add new transaction"""
     conn = get_connection()
     cursor = conn.cursor()
 
@@ -62,7 +62,7 @@ def add_expense(expense_date: date, amount: float, category: str, description: s
 
 
 def get_all_expenses() -> List[dict]:
-    """모든 거래 조회"""
+    """Get all transactions"""
     conn = get_connection()
     cursor = conn.cursor()
 
@@ -79,7 +79,7 @@ def get_all_expenses() -> List[dict]:
 
 
 def get_expenses_by_month(year: int, month: int) -> List[dict]:
-    """특정 월의 거래 조회"""
+    """Get transactions for a specific month"""
     conn = get_connection()
     cursor = conn.cursor()
 
@@ -103,7 +103,7 @@ def get_expenses_by_month(year: int, month: int) -> List[dict]:
 
 
 def get_recent_expenses(limit: int = 10) -> List[dict]:
-    """최근 거래 조회"""
+    """Get recent transactions"""
     conn = get_connection()
     cursor = conn.cursor()
 
@@ -121,7 +121,7 @@ def get_recent_expenses(limit: int = 10) -> List[dict]:
 
 
 def delete_expense(expense_id: int) -> bool:
-    """거래 삭제"""
+    """Delete transaction"""
     conn = get_connection()
     cursor = conn.cursor()
 
@@ -136,7 +136,7 @@ def delete_expense(expense_id: int) -> bool:
 
 def update_expense(expense_id: int, expense_date: date, amount: float,
                    category: str, description: str = "") -> bool:
-    """거래 수정"""
+    """Update transaction"""
     conn = get_connection()
     cursor = conn.cursor()
 
@@ -154,7 +154,7 @@ def update_expense(expense_id: int, expense_date: date, amount: float,
 
 
 def get_category_totals(year: int, month: int) -> List[Tuple[str, float]]:
-    """월별 카테고리별 합계"""
+    """Monthly totals by category"""
     conn = get_connection()
     cursor = conn.cursor()
 
@@ -179,7 +179,7 @@ def get_category_totals(year: int, month: int) -> List[Tuple[str, float]]:
 
 
 def get_daily_totals(year: int, month: int) -> List[Tuple[str, float]]:
-    """월별 일별 합계"""
+    """Monthly daily totals"""
     conn = get_connection()
     cursor = conn.cursor()
 
@@ -204,7 +204,7 @@ def get_daily_totals(year: int, month: int) -> List[Tuple[str, float]]:
 
 
 def get_monthly_total(year: int, month: int) -> float:
-    """월별 총 지출"""
+    """Monthly total expenses"""
     conn = get_connection()
     cursor = conn.cursor()
 
@@ -227,49 +227,49 @@ def get_monthly_total(year: int, month: int) -> float:
 
 
 def add_sample_data():
-    """샘플 데이터 추가"""
+    """Add sample data"""
     from datetime import timedelta
     import random
 
-    # 이미 데이터가 있으면 스킵
+    # Skip if data already exists
     if len(get_all_expenses()) > 0:
         return
 
     today = date.today()
 
     sample_expenses = [
-        # 식비
-        ("식비", "점심 식사", 12000, 15000),
-        ("식비", "저녁 식사", 15000, 25000),
-        ("식비", "커피", 4500, 6000),
-        ("식비", "편의점", 3000, 8000),
-        ("식비", "마트 장보기", 30000, 80000),
-        # 교통
-        ("교통", "지하철", 1400, 2800),
-        ("교통", "버스", 1400, 2800),
-        ("교통", "택시", 8000, 20000),
-        # 쇼핑
-        ("쇼핑", "옷 구매", 30000, 100000),
-        ("쇼핑", "생활용품", 10000, 30000),
-        # 문화/여가
-        ("문화/여가", "영화", 14000, 16000),
-        ("문화/여가", "넷플릭스", 13500, 17000),
-        ("문화/여가", "책 구매", 15000, 25000),
-        # 공과금
-        ("공과금", "전기세", 30000, 60000),
-        ("공과금", "수도세", 15000, 30000),
-        ("공과금", "통신비", 50000, 70000),
-        # 의료
-        ("의료", "병원", 10000, 50000),
-        ("의료", "약국", 5000, 20000),
-        # 교육
-        ("교육", "온라인 강의", 30000, 100000),
-        ("교육", "책", 20000, 40000),
+        # Food
+        ("Food", "Lunch", 12000, 15000),
+        ("Food", "Dinner", 15000, 25000),
+        ("Food", "Coffee", 4500, 6000),
+        ("Food", "Convenience store", 3000, 8000),
+        ("Food", "Grocery shopping", 30000, 80000),
+        # Transportation
+        ("Transportation", "Subway", 1400, 2800),
+        ("Transportation", "Bus", 1400, 2800),
+        ("Transportation", "Taxi", 8000, 20000),
+        # Shopping
+        ("Shopping", "Clothing", 30000, 100000),
+        ("Shopping", "Household items", 10000, 30000),
+        # Culture/Leisure
+        ("Culture/Leisure", "Movie", 14000, 16000),
+        ("Culture/Leisure", "Netflix", 13500, 17000),
+        ("Culture/Leisure", "Book purchase", 15000, 25000),
+        # Utilities
+        ("Utilities", "Electricity", 30000, 60000),
+        ("Utilities", "Water", 15000, 30000),
+        ("Utilities", "Phone/Internet", 50000, 70000),
+        # Medical
+        ("Medical", "Hospital", 10000, 50000),
+        ("Medical", "Pharmacy", 5000, 20000),
+        # Education
+        ("Education", "Online course", 30000, 100000),
+        ("Education", "Books", 20000, 40000),
     ]
 
-    # 이번 달에 랜덤하게 30개 정도의 거래 생성
+    # Generate about 30 random transactions for this month
     for day in range(1, min(today.day + 1, 28)):
-        # 하루에 1~4개 거래
+        # 1-4 transactions per day
         num_expenses = random.randint(1, 4)
         expense_date = date(today.year, today.month, day)
 
@@ -279,5 +279,5 @@ def add_sample_data():
             add_expense(expense_date, amount, category, desc)
 
 
-# 모듈 로드 시 DB 초기화
+# Initialize DB on module load
 init_db()

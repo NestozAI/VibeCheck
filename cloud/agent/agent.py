@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """
 VibeCheck Agent
-- 중앙 서버에 WebSocket 연결
-- 로컬에서 CLI 실행
-- 결과를 서버로 전송
-- 이미지 감지 및 업로드
-- 경로 기반 보안 시스템
-- PTY 모드: 터미널 UI를 그대로 웹에서 볼 수 있음
+- WebSocket connection to central server
+- Execute CLI locally
+- Send results to server
+- Image detection and upload
+- Path-based security system
+- PTY mode: view terminal UI directly on the web
 """
 
 import os
@@ -19,7 +19,7 @@ import json
 import re
 import glob
 import base64
-# PTY 관련 import 제거됨 (Message 모드로 전환)
+# PTY-related imports removed (switched to Message mode)
 from typing import Optional, Set, List, Dict
 from concurrent.futures import ThreadPoolExecutor
 
@@ -31,12 +31,12 @@ try:
     HAS_SCREENSHOT = True
 except ImportError as e:
     HAS_SCREENSHOT = False
-    print(f"⚠️ 스크린샷 기능 비활성화: {e}")
+    print(f"⚠️ Screenshot feature disabled: {e}")
 except Exception as e:
     HAS_SCREENSHOT = False
-    print(f"⚠️ 스크린샷 기능 비활성화 (기타 오류): {e}")
+    print(f"⚠️ Screenshot feature disabled (other error): {e}")
 
-# 로깅 설정
+# Logging configuration
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s'
@@ -44,22 +44,22 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # =============================================================================
-# 설정
+# Configuration
 # =============================================================================
 
-# Railway 배포 URL
+# Railway deployment URL
 DEFAULT_SERVER = "wss://vibecheck.nestoz.co/ws/agent"
 
-# 세션 파일 저장 디렉토리
+# Session file storage directory
 SESSION_DIR = os.path.expanduser("~/.vibecheck")
 
-# CLI 실행을 위한 스레드풀
+# Thread pool for CLI execution
 executor = ThreadPoolExecutor(max_workers=1)
 
-# 이미지 확장자
+# Image extensions
 IMAGE_EXTENSIONS = {'.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp'}
 
-# 안전한 시스템 명령어 (승인 없이 실행 가능)
+# Safe system commands (can be executed without approval)
 SAFE_SYSTEM_COMMANDS = {
     'nvidia-smi', 'df', 'free', 'uptime', 'whoami', 'hostname',
     'cat /proc/cpuinfo', 'cat /proc/meminfo', 'ps', 'top -bn1',
@@ -68,24 +68,24 @@ SAFE_SYSTEM_COMMANDS = {
 
 
 # =============================================================================
-# 이미지 감지 유틸리티
+# Image detection utilities
 # =============================================================================
 
 def get_images_with_mtime(work_dir: str, max_depth: int = 2) -> Dict[str, float]:
-    """작업 디렉토리의 이미지 파일과 수정 시간 반환 (성능 최적화)"""
+    """Return image files and modification times in work directory (performance optimized)"""
     images = {}
-    # 제외할 디렉토리 (성능)
+    # Directories to exclude (performance)
     SKIP_DIRS = {'node_modules', '.git', '__pycache__', 'venv', '.venv', 'dist', 'build', '.next'}
 
     try:
         for root, dirs, files in os.walk(work_dir):
-            # 깊이 제한
+            # Depth limit
             depth = root[len(work_dir):].count(os.sep)
             if depth >= max_depth:
-                dirs[:] = []  # 더 이상 하위 탐색 안함
+                dirs[:] = []  # Stop deeper traversal
                 continue
 
-            # 제외 디렉토리 스킵
+            # Skip excluded directories
             dirs[:] = [d for d in dirs if d not in SKIP_DIRS]
 
             for f in files:
@@ -97,13 +97,13 @@ def get_images_with_mtime(work_dir: str, max_depth: int = 2) -> Dict[str, float]
                     except OSError:
                         pass
     except Exception as e:
-        logger.warning(f"이미지 스캔 오류: {e}")
+        logger.warning(f"Image scan error: {e}")
 
     return images
 
 
 def find_new_or_modified_images(work_dir: str, before_images: Dict[str, float], max_depth: int = 2) -> List[str]:
-    """새로 생성되거나 수정된 이미지 파일 찾기"""
+    """Find newly created or modified image files"""
     after_images = get_images_with_mtime(work_dir, max_depth)
     result = []
     for path, mtime in after_images.items():
@@ -113,39 +113,39 @@ def find_new_or_modified_images(work_dir: str, before_images: Dict[str, float], 
 
 
 def image_to_base64(image_path: str) -> Optional[str]:
-    """이미지 파일을 base64로 인코딩"""
+    """Encode image file to base64"""
     try:
         with open(image_path, 'rb') as f:
             return base64.b64encode(f.read()).decode('utf-8')
     except Exception as e:
-        logger.error(f"이미지 인코딩 실패: {e}")
+        logger.error(f"Image encoding failed: {e}")
         return None
 
 
 # =============================================================================
-# 경로 보안 유틸리티
+# Path security utilities
 # =============================================================================
 
 def normalize_path(path: str) -> str:
-    """경로 정규화"""
+    """Normalize path"""
     return os.path.normpath(os.path.abspath(os.path.expanduser(path)))
 
 
 def extract_paths_from_message(message: str) -> List[str]:
-    """메시지에서 경로 추출"""
+    """Extract paths from message"""
     paths = []
 
-    # 절대 경로 패턴 (/로 시작)
+    # Absolute path pattern (starts with /)
     abs_pattern = r'(/[a-zA-Z0-9_\-./]+)'
     abs_matches = re.findall(abs_pattern, message)
     paths.extend(abs_matches)
 
-    # 상대 경로 패턴 (./나 ../ 로 시작)
+    # Relative path pattern (starts with ./ or ../)
     rel_pattern = r'(\.\./[a-zA-Z0-9_\-./]+|\.\/[a-zA-Z0-9_\-./]+)'
     rel_matches = re.findall(rel_pattern, message)
     paths.extend(rel_matches)
 
-    # 중복 제거
+    # Remove duplicates
     unique_paths = []
     seen = set()
     for p in paths:
@@ -160,7 +160,7 @@ def extract_paths_from_message(message: str) -> List[str]:
 
 
 def is_safe_system_command(message: str) -> bool:
-    """안전한 시스템 명령어인지 확인"""
+    """Check if it is a safe system command"""
     msg_lower = message.lower().strip()
     for cmd in SAFE_SYSTEM_COMMANDS:
         if cmd in msg_lower:
@@ -169,19 +169,19 @@ def is_safe_system_command(message: str) -> bool:
 
 
 # =============================================================================
-# 세션 ID 관리
+# Session ID management
 # =============================================================================
 
 def get_session_file_path(work_dir: str) -> str:
-    """작업 디렉토리에 대한 세션 파일 경로 반환"""
-    # 디렉토리 경로를 해시하여 고유한 파일명 생성
+    """Return session file path for the work directory"""
+    # Hash the directory path to generate a unique filename
     import hashlib
     dir_hash = hashlib.md5(work_dir.encode()).hexdigest()[:12]
     return os.path.join(SESSION_DIR, f"session_{dir_hash}.json")
 
 
 def save_session_id(work_dir: str, session_id: str):
-    """세션 ID 저장"""
+    """Save session ID"""
     os.makedirs(SESSION_DIR, exist_ok=True)
     session_file = get_session_file_path(work_dir)
     data = {
@@ -192,13 +192,13 @@ def save_session_id(work_dir: str, session_id: str):
     try:
         with open(session_file, 'w') as f:
             json.dump(data, f)
-        logger.info(f"세션 ID 저장: {session_id[:20]}...")
+        logger.info(f"Session ID saved: {session_id[:20]}...")
     except Exception as e:
-        logger.warning(f"세션 ID 저장 실패: {e}")
+        logger.warning(f"Failed to save session ID: {e}")
 
 
 def load_session_id(work_dir: str) -> Optional[str]:
-    """저장된 세션 ID 로드"""
+    """Load saved session ID"""
     session_file = get_session_file_path(work_dir)
     if os.path.exists(session_file):
         try:
@@ -206,22 +206,22 @@ def load_session_id(work_dir: str) -> Optional[str]:
                 data = json.load(f)
                 session_id = data.get("session_id")
                 if session_id:
-                    logger.info(f"이전 세션 ID 로드: {session_id[:20]}...")
+                    logger.info(f"Previous session ID loaded: {session_id[:20]}...")
                     return session_id
         except Exception as e:
-            logger.warning(f"세션 ID 로드 실패: {e}")
+            logger.warning(f"Failed to load session ID: {e}")
     return None
 
 
 def clear_session_id(work_dir: str):
-    """세션 ID 삭제 (새 세션 시작 시)"""
+    """Delete session ID (when starting a new session)"""
     session_file = get_session_file_path(work_dir)
     if os.path.exists(session_file):
         try:
             os.remove(session_file)
-            logger.info("이전 세션 ID 삭제됨")
+            logger.info("Previous session ID deleted")
         except Exception as e:
-            logger.warning(f"세션 ID 삭제 실패: {e}")
+            logger.warning(f"Failed to delete session ID: {e}")
 
 
 class VibeAgent:
@@ -233,30 +233,30 @@ class VibeAgent:
         self.server_url = f"{server_url}?key={api_key}"
         self.session_started = False
         self.ws: Optional[websockets.WebSocketClientProtocol] = None
-        self.processing = False  # CLI 실행 중 플래그
+        self.processing = False  # CLI execution in progress flag
 
-        # 신뢰 경로 (작업 디렉토리는 기본 신뢰)
+        # Trusted paths (work directory is trusted by default)
         self.trusted_paths: Set[str] = {normalize_path(work_dir)}
 
-        # 승인 대기 중인 요청
+        # Pending approval request
         self.pending_approval: Optional[dict] = None
 
-        # 최근 작업한 프로젝트 경로 저장 (스크린샷 등에 사용)
+        # Store recently worked project path (used for screenshots, etc.)
         self.last_project_path: Optional[str] = None
 
-        # 세션 ID 관리
+        # Session ID management
         self.session_id: Optional[str] = None
         if new_session:
             clear_session_id(work_dir)
         else:
             self.session_id = load_session_id(work_dir)
 
-        # 현재 실행 중인 프로세스 (인터럽트용)
+        # Currently running process (for interrupt)
         self.current_process: Optional[subprocess.Popen] = None
         self.process_interrupted = False
 
     def is_path_trusted(self, path: str) -> bool:
-        """경로가 신뢰할 수 있는지 확인"""
+        """Check if path is trusted"""
         normalized = normalize_path(path)
         for trusted in self.trusted_paths:
             if normalized == trusted or normalized.startswith(trusted + os.sep):
@@ -264,7 +264,7 @@ class VibeAgent:
         return False
 
     def check_untrusted_paths(self, message: str) -> List[str]:
-        """메시지에서 신뢰되지 않은 경로 찾기"""
+        """Find untrusted paths in message"""
         paths = extract_paths_from_message(message)
         untrusted = []
         for path in paths:
@@ -274,20 +274,20 @@ class VibeAgent:
         return untrusted
 
     def add_trusted_path(self, path: str):
-        """신뢰 경로 추가"""
+        """Add trusted path"""
         normalized = normalize_path(path)
         self.trusted_paths.add(normalized)
-        logger.info(f"신뢰 경로 추가: {normalized}")
+        logger.info(f"Trusted path added: {normalized}")
 
     def run_command_sync(self, message: str) -> str:
-        """로컬에서 CLI 명령 실행 (동기, 스레드에서 실행됨) - Popen 기반으로 인터럽트 지원"""
+        """Execute CLI command locally (sync, runs in thread) - Popen-based with interrupt support"""
         cmd = [
             "claude",
             "--print",
             "--dangerously-skip-permissions",
         ]
 
-        # 세션 이어가기: 저장된 세션 ID가 있으면 --resume, 아니면 --continue
+        # Resume session: use --resume if saved session ID exists, otherwise --continue
         if self.session_id:
             cmd.extend(["--resume", self.session_id])
         elif self.session_started:
@@ -295,14 +295,14 @@ class VibeAgent:
 
         cmd.append(message)
 
-        logger.info(f"명령 실행: {' '.join(cmd[:4])}...")
+        logger.info(f"Executing command: {' '.join(cmd[:4])}...")
 
-        # Windows에서는 shell=True 필요 (npm 글로벌 패키지 PATH 문제)
+        # shell=True needed on Windows (npm global package PATH issue)
         use_shell = sys.platform == "win32"
         self.process_interrupted = False
 
         try:
-            # Popen으로 프로세스 시작 (인터럽트 가능)
+            # Start process with Popen (interruptible)
             self.current_process = subprocess.Popen(
                 cmd if not use_shell else " ".join(f'"{c}"' if ' ' in c else c for c in cmd),
                 cwd=self.work_dir,
@@ -315,22 +315,22 @@ class VibeAgent:
                 errors='replace'
             )
 
-            # 프로세스 완료 대기 (타임아웃 5분)
+            # Wait for process completion (5 minute timeout)
             try:
                 stdout, stderr = self.current_process.communicate(timeout=300)
             except subprocess.TimeoutExpired:
                 self.current_process.kill()
                 self.current_process.communicate()
                 self.current_process = None
-                return "타임아웃 (5분 초과)"
+                return "Timeout (exceeded 5 minutes)"
 
             returncode = self.current_process.returncode
             self.current_process = None
 
-            # 인터럽트 되었으면 특별 메시지 반환
+            # Return special message if interrupted
             if self.process_interrupted:
-                logger.info("프로세스가 인터럽트됨")
-                return "⏹️ 작업이 중단되었습니다. 다음 메시지를 기다리는 중..."
+                logger.info("Process was interrupted")
+                return "⏹️ Task has been stopped. Waiting for next message..."
 
             if not self.session_started:
                 self.session_started = True
@@ -340,130 +340,130 @@ class VibeAgent:
                 logger.warning(f"stderr: {stderr[:200]}")
 
             if returncode != 0:
-                logger.error(f"CLI 실패: returncode={returncode}, stderr={stderr[:200] if stderr else 'None'}, stdout={stdout[:200] if stdout else 'None'}")
-                error_msg = stderr or stdout or '알 수 없는 오류'
+                logger.error(f"CLI failed: returncode={returncode}, stderr={stderr[:200] if stderr else 'None'}, stdout={stdout[:200] if stdout else 'None'}")
+                error_msg = stderr or stdout or 'Unknown error'
 
-                # 세션 ID가 유효하지 않으면 새 세션 시작
+                # Start new session if session ID is invalid
                 if self.session_id and ("session" in error_msg.lower() or "not found" in error_msg.lower()):
-                    logger.warning("세션 ID가 유효하지 않음. 새 세션으로 재시도...")
+                    logger.warning("Session ID is invalid. Retrying with new session...")
                     self.session_id = None
                     clear_session_id(self.work_dir)
                     return self.run_command_sync(message)
 
-                return f"오류: {error_msg}"
+                return f"Error: {error_msg}"
 
-            # 첫 실행 후 세션 ID 추출 및 저장
+            # Extract and save session ID after first execution
             if not self.session_id:
                 self._extract_and_save_session_id()
 
-            logger.info(f"응답 ({len(output)}자): {output[:100]}...")
+            logger.info(f"Response ({len(output)} chars): {output[:100]}...")
             return output
 
         except Exception as e:
             self.current_process = None
-            logger.error(f"실행 오류: {e}")
-            return f"실행 오류: {str(e)}"
+            logger.error(f"Execution error: {e}")
+            return f"Execution error: {str(e)}"
 
     def interrupt_current_process(self):
-        """현재 실행 중인 프로세스 인터럽트"""
+        """Interrupt the currently running process"""
         if self.current_process:
             try:
                 self.process_interrupted = True
-                self.current_process.terminate()  # SIGTERM 전송
-                logger.info("프로세스에 SIGTERM 전송")
-                # 1초 기다렸다가 안 죽으면 강제 종료
+                self.current_process.terminate()  # Send SIGTERM
+                logger.info("Sent SIGTERM to process")
+                # Wait 1 second, force kill if still alive
                 try:
                     self.current_process.wait(timeout=1)
                 except subprocess.TimeoutExpired:
                     self.current_process.kill()  # SIGKILL
-                    logger.info("프로세스에 SIGKILL 전송")
+                    logger.info("Sent SIGKILL to process")
                 return True
             except Exception as e:
-                logger.error(f"프로세스 인터럽트 실패: {e}")
+                logger.error(f"Failed to interrupt process: {e}")
                 return False
         return False
 
     def _extract_and_save_session_id(self):
-        """Claude Code의 최근 세션 ID 추출 및 저장 (프로젝트 디렉토리에서 직접)"""
+        """Extract and save Claude Code's latest session ID (directly from project directory)"""
         try:
-            # Claude Code 프로젝트 디렉토리 경로 계산
+            # Calculate Claude Code project directory path
             # ~/.claude/projects/-disk1-lecture-sotaaz-test-VibeCheck/
             work_dir_escaped = self.work_dir.replace('/', '-').lstrip('-')
             claude_project_dir = os.path.expanduser(f"~/.claude/projects/-{work_dir_escaped}")
 
             if not os.path.isdir(claude_project_dir):
-                logger.debug(f"Claude 프로젝트 디렉토리 없음: {claude_project_dir}")
+                logger.debug(f"Claude project directory not found: {claude_project_dir}")
                 return
 
-            # 가장 최근 수정된 .jsonl 파일 찾기
+            # Find the most recently modified .jsonl file
             jsonl_files = glob.glob(os.path.join(claude_project_dir, "*.jsonl"))
             if not jsonl_files:
-                logger.debug("세션 파일 없음")
+                logger.debug("No session files found")
                 return
 
-            # 수정 시간 기준 정렬
+            # Sort by modification time
             latest_file = max(jsonl_files, key=os.path.getmtime)
             session_id = os.path.basename(latest_file).replace('.jsonl', '')
 
-            # UUID 형식 검증 (간단히)
+            # Simple UUID format validation
             if len(session_id) == 36 and session_id.count('-') == 4:
                 self.session_id = session_id
                 save_session_id(self.work_dir, session_id)
-                logger.info(f"세션 ID 추출 성공: {session_id[:20]}...")
+                logger.info(f"Session ID extracted successfully: {session_id[:20]}...")
             else:
-                logger.debug(f"유효하지 않은 세션 ID 형식: {session_id}")
+                logger.debug(f"Invalid session ID format: {session_id}")
         except Exception as e:
-            logger.debug(f"세션 ID 추출 실패 (무시): {e}")
+            logger.debug(f"Failed to extract session ID (ignored): {e}")
 
     async def run_command(self, message: str) -> str:
-        """CLI 명령 실행 (비동기 래퍼)"""
+        """Execute CLI command (async wrapper)"""
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(executor, self.run_command_sync, message)
 
     def is_ws_open(self) -> bool:
-        """WebSocket 연결 상태 확인 (websockets 12.0+ 호환)"""
+        """Check WebSocket connection status (websockets 12.0+ compatible)"""
         if not self.ws:
             return False
         try:
-            # websockets 12.0+에서는 state 속성 사용
+            # Use state attribute in websockets 12.0+
             from websockets.protocol import State
             return self.ws.state == State.OPEN
         except (AttributeError, ImportError):
-            # 이전 버전 호환
+            # Backward compatibility
             try:
                 return not self.ws.closed
             except AttributeError:
-                return True  # 확인 불가시 열려있다고 가정
+                return True  # Assume open if unable to check
 
     async def ping_loop(self):
-        """주기적으로 ping 전송 (연결 유지)"""
+        """Periodically send ping (keep connection alive)"""
         while True:
             try:
-                await asyncio.sleep(15)  # 15초마다 ping
+                await asyncio.sleep(15)  # Ping every 15 seconds
                 if self.is_ws_open():
                     await self.ws.send(json.dumps({"type": "ping"}))
-                    logger.debug("ping 전송")
+                    logger.debug("Ping sent")
             except ConnectionClosed:
-                logger.debug("ping 중 연결 종료")
+                logger.debug("Connection closed during ping")
                 break
             except Exception as e:
-                logger.debug(f"ping 오류: {e}")
+                logger.debug(f"Ping error: {e}")
                 break
 
     async def sync_session_with_server(self):
-        """서버와 세션 ID 동기화 (디바이스 간 세션 공유)"""
+        """Sync session ID with server (cross-device session sharing)"""
         if not self.is_ws_open():
             return
 
         try:
-            # 서버에 세션 동기화 요청
+            # Send session sync request to server
             await self.ws.send(json.dumps({
                 "type": "session_sync",
                 "work_dir": self.work_dir,
-                "session_id": self.session_id  # 로컬에 있으면 전송, 없으면 None
+                "session_id": self.session_id  # Send if available locally, None otherwise
             }))
 
-            # 서버 응답 대기 (타임아웃 5초)
+            # Wait for server response (5 second timeout)
             import asyncio
             try:
                 response = await asyncio.wait_for(self.ws.recv(), timeout=5.0)
@@ -474,25 +474,25 @@ class VibeAgent:
                     source = data.get("source")
 
                     if server_session_id and source == "server":
-                        # 서버에 기존 세션 있음 -> 사용
+                        # Existing session found on server -> use it
                         self.session_id = server_session_id
                         save_session_id(self.work_dir, server_session_id)
-                        logger.info(f"서버에서 세션 ID 동기화: {server_session_id[:20]}...")
+                        logger.info(f"Session ID synced from server: {server_session_id[:20]}...")
                     elif source == "agent":
-                        # Agent의 세션이 서버에 저장됨
-                        logger.info(f"세션 ID 서버에 저장됨: {self.session_id[:20] if self.session_id else 'None'}...")
+                        # Agent's session saved to server
+                        logger.info(f"Session ID saved to server: {self.session_id[:20] if self.session_id else 'None'}...")
                     else:
-                        # 세션 없음 - 새로 생성됨
-                        logger.info("세션 없음, 새 세션으로 시작")
+                        # No session - starting fresh
+                        logger.info("No session found, starting new session")
 
             except asyncio.TimeoutError:
-                logger.warning("세션 동기화 타임아웃, 로컬 세션 사용")
+                logger.warning("Session sync timeout, using local session")
 
         except Exception as e:
-            logger.warning(f"세션 동기화 실패: {e}")
+            logger.warning(f"Session sync failed: {e}")
 
     async def update_session_on_server(self, session_id: str):
-        """새 세션 ID를 서버에 업데이트"""
+        """Update new session ID on server"""
         if not self.is_ws_open():
             return
 
@@ -502,147 +502,147 @@ class VibeAgent:
                 "work_dir": self.work_dir,
                 "session_id": session_id
             }))
-            logger.info(f"세션 ID 서버에 업데이트: {session_id[:20]}...")
+            logger.info(f"Session ID updated on server: {session_id[:20]}...")
         except Exception as e:
-            logger.warning(f"세션 업데이트 실패: {e}")
+            logger.warning(f"Session update failed: {e}")
 
     async def connect(self):
-        """서버에 연결하고 메시지 처리"""
-        logger.info(f"서버 연결 중: {self.server_url[:50]}...")
+        """Connect to server and process messages"""
+        logger.info(f"Connecting to server: {self.server_url[:50]}...")
 
         try:
             async with websockets.connect(
                 self.server_url,
-                ping_interval=20,  # websockets 라이브러리 자체 ping
+                ping_interval=20,  # websockets library built-in ping
                 ping_timeout=30
             ) as ws:
                 self.ws = ws
-                logger.info("서버 연결 성공!")
+                logger.info("Server connection successful!")
 
-                # 연결 확인 메시지 대기
+                # Wait for connection confirmation message
                 response = await ws.recv()
-                logger.info(f"서버 응답: {response}")
+                logger.info(f"Server response: {response}")
 
-                # 서버와 세션 동기화
+                # Sync session with server
                 await self.sync_session_with_server()
 
                 print("\n" + "=" * 50)
-                print("  VibeCheck Agent 실행 중")
-                print(f"  작업 디렉토리: {self.work_dir}")
+                print("  VibeCheck Agent running")
+                print(f"  Work directory: {self.work_dir}")
                 if self.session_id:
-                    print(f"  세션 ID: {self.session_id[:20]}...")
-                print(f"  스크린샷 기능: {'✅ 활성화' if HAS_SCREENSHOT else '❌ 비활성화'}")
-                print("  Slack에서 메시지를 보내세요!")
-                print("  종료: Ctrl+C")
+                    print(f"  Session ID: {self.session_id[:20]}...")
+                print(f"  Screenshot feature: {'✅ Enabled' if HAS_SCREENSHOT else '❌ Disabled'}")
+                print("  Send a message from Slack!")
+                print("  Exit: Ctrl+C")
                 print("=" * 50 + "\n")
 
-                # ping 루프 시작
+                # Start ping loop
                 ping_task = asyncio.create_task(self.ping_loop())
 
                 try:
-                    # 메시지 수신 대기
+                    # Wait for incoming messages
                     async for message in ws:
                         await self.handle_message(message)
                 finally:
                     ping_task.cancel()
 
         except websockets.exceptions.ConnectionClosed as e:
-            logger.warning(f"서버 연결이 닫혔습니다: {e}")
+            logger.warning(f"Server connection closed: {e}")
         except Exception as e:
-            logger.error(f"연결 오류: {e}")
+            logger.error(f"Connection error: {e}")
             raise
 
     async def handle_message(self, raw_message: str):
-        """서버에서 받은 메시지 처리"""
+        """Process messages received from server"""
         data = json.loads(raw_message)
         msg_type = data.get("type")
 
         if msg_type == "query":
-            # 사용자 쿼리 처리
+            # Process user query
             message = data.get("message", "")
-            logger.info(f"쿼리 수신: {message[:50]}...")
+            logger.info(f"Query received: {message[:50]}...")
 
-            # 🛡️ 보안 검사: 신뢰되지 않은 경로 확인
+            # 🛡️ Security check: verify untrusted paths
             untrusted_paths = self.check_untrusted_paths(message)
 
             if untrusted_paths and not is_safe_system_command(message):
-                # 승인 필요 - 서버에 승인 요청 전송
-                logger.info(f"승인 필요: {untrusted_paths}")
+                # Approval needed - send approval request to server
+                logger.info(f"Approval required: {untrusted_paths}")
                 self.pending_approval = {"message": message, "paths": untrusted_paths}
 
                 if self.is_ws_open():
                     await self.ws.send(json.dumps({
                         "type": "approval_required",
                         "paths": untrusted_paths,
-                        "message": message[:200]  # 미리보기
+                        "message": message[:200]  # Preview
                     }))
                 return
 
-            # CLI 실행
-            logger.info("CLI 실행 시작...")
+            # Execute CLI
+            logger.info("CLI execution starting...")
             await self.execute_and_respond(message)
-            logger.info("CLI 실행 완료")
+            logger.info("CLI execution complete")
 
         elif msg_type == "approval":
-            # 서버에서 승인/거절 응답
+            # Approval/rejection response from server
             approved = data.get("approved", False)
             permanent = data.get("permanent", False)
 
             if self.pending_approval:
                 if approved:
-                    logger.info("승인됨! 명령 실행 중...")
+                    logger.info("Approved! Executing command...")
 
-                    # 영구 승인이면 경로 추가
+                    # Add path if permanently approved
                     if permanent:
                         for path in self.pending_approval.get("paths", []):
                             self.add_trusted_path(path)
 
-                    # 실행
+                    # Execute
                     await self.execute_and_respond(self.pending_approval["message"])
                 else:
-                    logger.info("거절됨")
+                    logger.info("Rejected")
                     if self.is_ws_open():
                         await self.ws.send(json.dumps({
                             "type": "response",
-                            "result": "❌ 요청이 거절되었습니다."
+                            "result": "❌ Request was rejected."
                         }))
 
                 self.pending_approval = None
 
         elif msg_type == "add_trusted_path":
-            # 서버에서 신뢰 경로 추가 요청
+            # Trusted path addition request from server
             path = data.get("path")
             if path:
                 self.add_trusted_path(path)
 
         elif msg_type == "interrupt":
-            # 사용자가 Stop 버튼 클릭 - 현재 프로세스 중단
-            logger.info("인터럽트 요청 수신")
+            # User clicked Stop button - interrupt current process
+            logger.info("Interrupt request received")
             if self.processing and self.current_process:
                 interrupted = self.interrupt_current_process()
                 if interrupted and self.is_ws_open():
                     await self.ws.send(json.dumps({
                         "type": "response",
-                        "result": "⏹️ 작업이 중단되었습니다. 새 메시지를 입력하세요."
+                        "result": "⏹️ Task has been stopped. Please enter a new message."
                     }))
             else:
-                logger.info("인터럽트할 프로세스 없음")
+                logger.info("No process to interrupt")
 
         elif msg_type == "ping":
             await self.ws.send(json.dumps({"type": "pong"}))
 
         elif msg_type == "pong":
-            pass  # 서버의 pong 응답
+            pass  # Server's pong response
 
         elif msg_type == "error":
-            logger.error(f"서버 오류: {data.get('message')}")
+            logger.error(f"Server error: {data.get('message')}")
 
     async def execute_and_respond(self, message: str):
-        """CLI 실행 및 응답 (이미지 감지 포함)"""
-        logger.info("execute_and_respond 진입")
+        """Execute CLI and respond (with image detection)"""
+        logger.info("Entering execute_and_respond")
         self.processing = True
 
-        # 실행 전 이미지 목록 저장 (비동기로 실행, 타임아웃 2초)
+        # Save image list before execution (async, 2 second timeout)
         before_images = {}
         try:
             loop = asyncio.get_event_loop()
@@ -650,66 +650,66 @@ class VibeAgent:
                 loop.run_in_executor(None, get_images_with_mtime, self.work_dir),
                 timeout=2.0
             )
-            logger.debug(f"이미지 스캔 완료: {len(before_images)}개")
+            logger.debug(f"Image scan complete: {len(before_images)} files")
         except asyncio.TimeoutError:
-            logger.warning("이미지 스캔 타임아웃 (2초), 스킵")
+            logger.warning("Image scan timeout (2s), skipping")
         except Exception as e:
-            logger.warning(f"이미지 스캔 오류: {e}")
+            logger.warning(f"Image scan error: {e}")
 
-        # CLI 실행 (비동기 - ping 루프가 계속 동작)
-        logger.info("run_command 호출 전...")
+        # Execute CLI (async - ping loop continues running)
+        logger.info("Before run_command call...")
         old_session_id = self.session_id
         result = await self.run_command(message)
-        logger.info(f"run_command 완료: {len(result) if result else 0}자")
+        logger.info(f"run_command complete: {len(result) if result else 0} chars")
 
-        # 새 세션 ID가 생성되었으면 서버에 업데이트
+        # Update server if new session ID was created
         if self.session_id and self.session_id != old_session_id:
             await self.update_session_on_server(self.session_id)
 
         self.processing = False
 
-        # 메시지에서 프로젝트 경로 추출 및 저장 (스크린샷용)
+        # Extract and save project path from message (for screenshots)
         path_pattern = r'(/[a-zA-Z0-9_\-./]+)'
         path_matches = re.findall(path_pattern, message)
         for path in path_matches:
             if os.path.isdir(path):
-                # 디렉토리면 일단 저장 (프로젝트 타입 무관)
+                # Save if it's a directory (regardless of project type)
                 self.last_project_path = path
-                logger.info(f"프로젝트 경로 저장: {path}")
+                logger.info(f"Project path saved: {path}")
                 break
 
-        # 스크린샷 요청 감지 및 프로젝트 스크린샷 생성
-        screenshot_keywords = ['스크린샷', 'screenshot', '캡처', 'capture', '보여줘', 'show me', 'preview', '미리보기', 'ui']
+        # Detect screenshot request and generate project screenshot
+        screenshot_keywords = ['screenshot', 'capture', 'show me', 'preview', 'ui']
         wants_screenshot = any(kw in message.lower() for kw in screenshot_keywords)
-        generated_screenshot = None  # 생성된 스크린샷 경로
+        generated_screenshot = None  # Generated screenshot path
 
         if wants_screenshot and HAS_SCREENSHOT:
             project_dir = None
-            # 스크린샷은 /tmp에 저장 (권한 문제 방지)
+            # Save screenshots to /tmp (avoid permission issues)
             screenshot_path = '/tmp/vibecheck_screenshot.png'
 
-            # 1. 메시지에서 프로젝트 경로 추출
+            # 1. Extract project path from message
             for path in path_matches:
                 if os.path.isdir(path):
-                    # 프로젝트 디렉토리인지 확인
+                    # Check if it's a project directory
                     project_info = detect_project_type(path)
                     if project_info["type"] != "unknown":
                         project_dir = path
-                        logger.info(f"프로젝트 감지: {path} -> {project_info}")
+                        logger.info(f"Project detected: {path} -> {project_info}")
                         break
 
-            # 2. 저장된 프로젝트 경로 사용 (이전 대화 컨텍스트)
+            # 2. Use saved project path (previous conversation context)
             if not project_dir and self.last_project_path and os.path.isdir(self.last_project_path):
                 project_dir = self.last_project_path
-                logger.info(f"저장된 프로젝트 경로 사용: {project_dir}")
+                logger.info(f"Using saved project path: {project_dir}")
 
-            # 3. work_dir 확인
+            # 3. Check work_dir
             if not project_dir:
                 project_info = detect_project_type(self.work_dir)
                 if project_info["type"] != "unknown":
                     project_dir = self.work_dir
 
-            # 4. 응답에서 HTML 파일 경로 찾기 (폴백)
+            # 4. Find HTML file path in response (fallback)
             if not project_dir:
                 html_pattern = r'([a-zA-Z0-9_\-./]+\.html)'
                 html_matches = re.findall(html_pattern, result)
@@ -720,37 +720,37 @@ class VibeAgent:
                         html_path = os.path.join(self.work_dir, html_file)
                     if os.path.isfile(html_path):
                         try:
-                            logger.info(f"HTML 파일 스크린샷 생성 중: {html_path}")
+                            logger.info(f"Generating screenshot for HTML file: {html_path}")
                             loop = asyncio.get_event_loop()
                             await loop.run_in_executor(
                                 executor,
                                 lambda hp=html_path: html_file_to_screenshot(hp, screenshot_path, width=1200, height=800, full_page=True)
                             )
-                            logger.info(f"스크린샷 생성 완료: {screenshot_path}")
+                            logger.info(f"Screenshot generated: {screenshot_path}")
                             generated_screenshot = screenshot_path
                         except Exception as e:
-                            logger.error(f"스크린샷 생성 실패: {e}")
+                            logger.error(f"Screenshot generation failed: {e}")
                         break
 
-            # 프로젝트 스크린샷 생성 (별도 스레드에서 실행 - Playwright Sync API는 asyncio와 호환 안됨)
+            # Generate project screenshot (runs in separate thread - Playwright Sync API is incompatible with asyncio)
             if project_dir:
                 try:
-                    logger.info(f"프로젝트 스크린샷 생성 중: {project_dir}")
+                    logger.info(f"Generating project screenshot: {project_dir}")
                     loop = asyncio.get_event_loop()
                     await loop.run_in_executor(
                         executor,
                         lambda: screenshot_project(project_dir, screenshot_path, width=1200, height=800, full_page=True)
                     )
-                    logger.info(f"스크린샷 생성 완료: {screenshot_path}")
+                    logger.info(f"Screenshot generated: {screenshot_path}")
                     generated_screenshot = screenshot_path
                 except Exception as e:
-                    logger.error(f"프로젝트 스크린샷 생성 실패: {e}")
+                    logger.error(f"Project screenshot generation failed: {e}")
 
-        # 새로 생성된 이미지 감지
+        # Detect newly created images
         new_images = find_new_or_modified_images(self.work_dir, before_images)
         images_data = []
 
-        # 명시적으로 생성된 스크린샷 먼저 추가
+        # Add explicitly generated screenshot first
         if generated_screenshot and os.path.isfile(generated_screenshot):
             b64 = image_to_base64(generated_screenshot)
             if b64:
@@ -758,16 +758,16 @@ class VibeAgent:
                     "filename": "screenshot.png",
                     "data": b64
                 })
-                logger.info(f"스크린샷 이미지 추가: screenshot.png")
-                # 스크린샷 파일 삭제 (임시 파일)
+                logger.info(f"Screenshot image added: screenshot.png")
+                # Delete screenshot file (temporary file)
                 try:
                     os.remove(generated_screenshot)
-                    logger.info("스크린샷 파일 삭제됨")
+                    logger.info("Screenshot file deleted")
                 except:
                     pass
 
-        for img_path in new_images[:5]:  # 최대 5개
-            # 이미 추가된 스크린샷은 건너뛰기
+        for img_path in new_images[:5]:  # Maximum 5
+            # Skip already added screenshots
             if generated_screenshot and img_path == generated_screenshot:
                 continue
             b64 = image_to_base64(img_path)
@@ -776,29 +776,29 @@ class VibeAgent:
                     "filename": os.path.basename(img_path),
                     "data": b64
                 })
-                logger.info(f"이미지 감지: {os.path.basename(img_path)}")
+                logger.info(f"Image detected: {os.path.basename(img_path)}")
 
-        # 이미지 전달 요청 키워드
-        image_request_keywords = ['이미지', 'image', '전달', 'send', '보내', '첨부', 'attach']
+        # Image delivery request keywords
+        image_request_keywords = ['image', 'send', 'attach']
         wants_image = any(kw in message.lower() for kw in image_request_keywords)
 
-        # 응답에서 언급된 이미지 경로 추출 및 전송
-        if not images_data or wants_image:  # 이미지가 없거나 명시적 요청 시
-            # 1. 절대 경로 패턴
+        # Extract and send image paths mentioned in response
+        if not images_data or wants_image:  # If no images or explicit request
+            # 1. Absolute path pattern
             img_path_pattern = r'(/[a-zA-Z0-9_\-./]+\.(?:png|jpg|jpeg|gif|webp|bmp))'
             mentioned_images = re.findall(img_path_pattern, result, re.IGNORECASE)
 
-            # 메시지에서도 이미지 경로 추출
+            # Also extract image paths from message
             msg_images = re.findall(img_path_pattern, message, re.IGNORECASE)
             mentioned_images = mentioned_images + msg_images
 
-            # 2. 파일명만 있는 경우 (예: 01-hero.png)
+            # 2. Filename only case (e.g., 01-hero.png)
             filename_pattern = r'[\s\-]([a-zA-Z0-9_\-]+\.(?:png|jpg|jpeg|gif|webp|bmp))'
             mentioned_filenames = re.findall(filename_pattern, result, re.IGNORECASE)
 
             added_paths = set()
 
-            # 절대 경로 이미지 처리
+            # Process absolute path images
             for img_path in mentioned_images[:10]:
                 if img_path in added_paths:
                     continue
@@ -810,9 +810,9 @@ class VibeAgent:
                             "data": b64
                         })
                         added_paths.add(img_path)
-                        logger.info(f"응답에서 이미지 추출: {os.path.basename(img_path)}")
+                        logger.info(f"Image extracted from response: {os.path.basename(img_path)}")
 
-            # 파일명만 있는 경우 - last_project_path에서 찾기
+            # Filename only case - search in last_project_path
             if len(images_data) < 10 and self.last_project_path:
                 search_dirs = [
                     self.last_project_path,
@@ -837,10 +837,10 @@ class VibeAgent:
                                     "data": b64
                                 })
                                 added_paths.add(img_path)
-                                logger.info(f"프로젝트 폴더에서 이미지 찾음: {filename}")
+                                logger.info(f"Image found in project folder: {filename}")
                             break
 
-        # 결과 전송
+        # Send result
         if self.is_ws_open():
             try:
                 response_data = {
@@ -848,32 +848,32 @@ class VibeAgent:
                     "result": result
                 }
 
-                # 이미지가 있으면 함께 전송
+                # Include images if available
                 if images_data:
                     response_data["images"] = images_data
-                    logger.info(f"{len(images_data)}개 이미지 전송")
+                    logger.info(f"Sending {len(images_data)} images")
 
                 await self.ws.send(json.dumps(response_data))
-                logger.info("응답 전송 완료")
+                logger.info("Response sent")
             except ConnectionClosed:
-                logger.error("응답 전송 중 연결 종료됨")
+                logger.error("Connection closed while sending response")
         else:
-            logger.error("WebSocket이 닫혀서 응답 전송 실패")
+            logger.error("Failed to send response: WebSocket is closed")
 
 
 async def main():
-    """메인 함수"""
+    """Main function"""
     parser = argparse.ArgumentParser(description="VibeCheck Agent")
     parser.add_argument("--key", "-k", required=True, help="API Key")
-    parser.add_argument("--dir", "-d", default=os.getcwd(), help="작업 디렉토리")
-    parser.add_argument("--server", "-s", default=DEFAULT_SERVER, help="서버 URL")
-    parser.add_argument("--new-session", "-n", action="store_true", help="새 세션 시작 (이전 세션 무시)")
+    parser.add_argument("--dir", "-d", default=os.getcwd(), help="Work directory")
+    parser.add_argument("--server", "-s", default=DEFAULT_SERVER, help="Server URL")
+    parser.add_argument("--new-session", "-n", action="store_true", help="Start new session (ignore previous session)")
 
     args = parser.parse_args()
 
-    # 작업 디렉토리 확인
+    # Verify work directory
     if not os.path.isdir(args.dir):
-        print(f"Error: 디렉토리가 존재하지 않습니다: {args.dir}")
+        print(f"Error: Directory does not exist: {args.dir}")
         sys.exit(1)
 
     agent = VibeAgent(
@@ -883,16 +883,16 @@ async def main():
         new_session=args.new_session
     )
 
-    # 재연결 로직
+    # Reconnection logic
     while True:
         try:
             await agent.connect()
         except KeyboardInterrupt:
-            logger.info("종료합니다.")
+            logger.info("Shutting down.")
             break
         except Exception as e:
-            logger.error(f"연결 실패: {e}")
-            logger.info("5초 후 재연결...")
+            logger.error(f"Connection failed: {e}")
+            logger.info("Reconnecting in 5 seconds...")
             await asyncio.sleep(5)
 
 

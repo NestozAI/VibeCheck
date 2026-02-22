@@ -225,7 +225,7 @@ export class ClaudeSession {
             } else {
               const errorResult = result as SDKResultError;
               cost_usd = errorResult.total_cost_usd;
-              resultText = `오류 (${errorResult.subtype}): ${errorResult.errors?.join(", ") ?? "알 수 없는 오류"
+              resultText = `Error (${errorResult.subtype}): ${errorResult.errors?.join(", ") ?? "Unknown error"
                 }`;
             }
             break;
@@ -236,7 +236,7 @@ export class ClaudeSession {
         }
       }
     } catch (error) {
-      // AbortError는 handleInterrupt가 단독으로 처리
+      // AbortError is handled solely by handleInterrupt
       if (error instanceof AbortError) throw error;
 
       // Invalid session → retry with new session
@@ -246,7 +246,7 @@ export class ClaudeSession {
         (errMsg.toLowerCase().includes("session") ||
           errMsg.toLowerCase().includes("not found"))
       ) {
-        console.warn("[claude] 세션 ID가 유효하지 않음. 새 세션으로 재시도...");
+        console.warn("[claude] Invalid session ID. Retrying with new session...");
         this.sessionId = null;
         this.sessionStarted = false;
         return this.execute(message, model, skill, systemPrompt, agents);
@@ -277,7 +277,7 @@ export class ClaudeSession {
         await this.currentQuery.interrupt();
         return true;
       } catch (e) {
-        console.error("[claude] interrupt 실패:", e);
+        console.error("[claude] Interrupt failed:", e);
       }
     }
     if (this.abortController) {

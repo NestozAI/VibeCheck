@@ -74,7 +74,7 @@ export class VibeAgent {
     this.scheduler.onTaskFire = async (task) => {
       if (this.processing) {
         // User query in progress: queue and run after it finishes
-        console.log(`[scheduler] 사용자 쿼리 진행 중, 태스크 큐에 추가: "${task.message.slice(0, 40)}"`);
+        console.log(`[scheduler] User query in progress, queuing task: "${task.message.slice(0, 40)}"`);
         this.pendingScheduledTasks.push(task);
         return;
       }
@@ -126,11 +126,11 @@ export class VibeAgent {
 
     // Log system init info
     this.claude.onSystemInit = (msg: SDKSystemMessage) => {
-      console.log(`[agent] Claude Code 초기화 완료`);
-      console.log(`  모델: ${msg.model}`);
-      console.log(`  인증: ${msg.apiKeySource}`);
-      console.log(`  권한: ${msg.permissionMode}`);
-      console.log(`  도구: ${msg.tools.length}개`);
+      console.log(`[agent] Claude Code initialized`);
+      console.log(`  Model: ${msg.model}`);
+      console.log(`  Auth: ${msg.apiKeySource}`);
+      console.log(`  Permission: ${msg.permissionMode}`);
+      console.log(`  Tools: ${msg.tools.length}`);
     };
   }
 
@@ -146,7 +146,7 @@ export class VibeAgent {
       });
 
       this.ws.on("open", async () => {
-        console.log("[agent] 서버 연결됨");
+        console.log("[agent] Connected to server");
 
         // Start ping loop
         this.startPingLoop();
@@ -154,7 +154,7 @@ export class VibeAgent {
         // Sync session with server
         await this.syncSession();
 
-        console.log("[agent] 메시지 대기 중...");
+        console.log("[agent] Waiting for messages...");
       });
 
       this.ws.on("message", async (data) => {
@@ -162,20 +162,20 @@ export class VibeAgent {
           const msg: ServerToAgentMessage = JSON.parse(data.toString());
           await this.handleMessage(msg);
         } catch (e) {
-          console.error("[agent] 메시지 처리 오류:", e);
+          console.error("[agent] Message handling error:", e);
         }
       });
 
       this.ws.on("close", (code, reason) => {
         console.log(
-          `[agent] 연결 종료: ${code} ${reason.toString()}`,
+          `[agent] Connection closed: ${code} ${reason.toString()}`,
         );
         this.stopPingLoop();
         resolve();
       });
 
       this.ws.on("error", (error) => {
-        console.error("[agent] WebSocket 오류:", error.message);
+        console.error("[agent] WebSocket error:", error.message);
         this.stopPingLoop();
         reject(error);
       });
@@ -221,7 +221,7 @@ export class VibeAgent {
         break;
 
       case "error":
-        console.error(`[agent] 서버 오류: ${msg.message}`);
+        console.error(`[agent] Server error: ${msg.message}`);
         break;
 
       // ── Skill messages ────────────────────────────────────────────────────
@@ -283,13 +283,13 @@ export class VibeAgent {
     if (this.processing) {
       this.send({
         type: "response",
-        result: "이전 작업이 아직 실행 중입니다. 잠시 기다려주세요.",
+        result: "A previous task is still running. Please wait.",
       });
       return;
     }
 
     this.processing = true;
-    console.log(`[agent] 쿼리 수신: ${message.slice(0, 80)}...`);
+    console.log(`[agent] Query received: ${message.slice(0, 80)}...`);
 
     try {
       // Before-images snapshot
@@ -301,7 +301,7 @@ export class VibeAgent {
 
       // Execute Claude query (with optional skill preset)
       const skill = skillId ? getSkill(skillId) : undefined;
-      if (skill) console.log(`[agent] 스킬 적용: ${skill.icon} ${skill.name}`);
+      if (skill) console.log(`[agent] Skill applied: ${skill.icon} ${skill.name}`);
       const execResult: ExecuteResult = await this.claude.execute(
         message,
         model,
@@ -364,23 +364,23 @@ export class VibeAgent {
 
       if (execResult.cost_usd !== undefined) {
         console.log(
-          `[agent] 응답 전송 (${execResult.text.length}자, ${images.length}개 이미지, $${execResult.cost_usd.toFixed(4)}, ${execResult.num_turns}턴)`,
+          `[agent] Response sent (${execResult.text.length} chars, ${images.length} images, $${execResult.cost_usd.toFixed(4)}, ${execResult.num_turns} turns)`,
         );
       } else {
         console.log(
-          `[agent] 응답 전송 (${execResult.text.length}자, ${images.length}개 이미지)`,
+          `[agent] Response sent (${execResult.text.length} chars, ${images.length} images)`,
         );
       }
     } catch (e) {
-      // interrupt로 인한 AbortError는 handleInterrupt가 응답 메시지를 전송
-      // → 여기서는 아무것도 하지 않고 조용히 종료
+      // AbortError from interrupt is handled by handleInterrupt which sends the response
+      // → silently exit here
       if (e instanceof AbortError) return;
 
       const errMsg = e instanceof Error ? e.message : String(e);
-      console.error("[agent] 쿼리 실행 오류:", errMsg);
+      console.error("[agent] Query execution error:", errMsg);
       this.send({
         type: "response",
-        result: `오류: ${errMsg}`,
+        result: `Error: ${errMsg}`,
       });
     } finally {
       this.processing = false;
@@ -408,7 +408,7 @@ export class VibeAgent {
       });
     } catch (e) {
       if (!(e instanceof AbortError)) {
-        console.error("[scheduler] 태스크 실행 오류:", e);
+        console.error("[scheduler] Task execution error:", e);
       }
     } finally {
       this.processing = false;
@@ -420,19 +420,19 @@ export class VibeAgent {
   private async drainScheduledQueue(): Promise<void> {
     const next = this.pendingScheduledTasks.shift();
     if (next) {
-      console.log(`[scheduler] 큐 드레인: "${next.message.slice(0, 40)}"`);
+      console.log(`[scheduler] Draining queue: "${next.message.slice(0, 40)}"`);
       await this.runScheduledTask(next);
     }
   }
 
   private async handleInterrupt(): Promise<void> {
-    console.log("[agent] 인터럽트 요청 수신");
+    console.log("[agent] Interrupt request received");
     if (this.processing) {
       const interrupted = await this.claude.interrupt();
       if (interrupted) {
         this.send({
           type: "response",
-          result: "⏹️ 작업이 중단되었습니다. 다음 메시지를 기다리는 중...",
+          result: "⏹️ Task interrupted. Waiting for next message...",
         });
       }
     }
@@ -462,7 +462,7 @@ export class VibeAgent {
         data: b64,
       };
     } catch (e) {
-      console.error("[agent] 스크린샷 생성 실패:", e);
+      console.error("[agent] Screenshot generation failed:", e);
       return null;
     }
   }
@@ -478,7 +478,7 @@ export class VibeAgent {
 
     // Wait for session_info from server (with timeout)
     // The response is handled in handleSessionInfo
-    console.log("[agent] 세션 동기화 요청 전송");
+    console.log("[agent] Session sync request sent");
   }
 
   private handleSessionInfo(msg: { session_id: string | null; source: string }): void {
@@ -487,7 +487,7 @@ export class VibeAgent {
       if (!this.claude.currentSessionId) {
         this.claude.currentSessionIdOverride = msg.session_id;
         saveSessionId(this.workDir, msg.session_id);
-        console.log(`[agent] 서버 세션 동기화: ${msg.session_id.slice(0, 20)}...`);
+        console.log(`[agent] Server session synced: ${msg.session_id.slice(0, 20)}...`);
       }
     }
   }
@@ -536,22 +536,22 @@ async function withTimeout<T>(
   });
 }
 
-/** Map SDK tool names to human-readable Korean labels for the web UI */
+/** Map SDK tool names to human-readable labels for the web UI */
 function toolLabel(tool: string, status: "start" | "end"): string {
   const labels: Record<string, [string, string]> = {
-    Read: ["📖 파일 읽는 중...", "📖 파일 읽기 완료"],
-    Write: ["✏️ 파일 쓰는 중...", "✏️ 파일 쓰기 완료"],
-    Edit: ["✂️ 코드 수정 중...", "✂️ 코드 수정 완료"],
-    Bash: ["⚙️ 명령 실행 중...", "⚙️ 명령 실행 완료"],
-    Glob: ["🔍 파일 검색 중...", "🔍 파일 검색 완료"],
-    Grep: ["🔍 코드 검색 중...", "🔍 코드 검색 완료"],
-    WebFetch: ["🌐 웹 요청 중...", "🌐 웹 요청 완료"],
-    WebSearch: ["🌐 웹 검색 중...", "🌐 웹 검색 완료"],
-    TodoWrite: ["📝 할 일 저장 중...", "📝 할 일 저장 완료"],
-    NotebookEdit: ["📓 노트북 수정 중...", "📓 노트북 수정 완료"],
+    Read: ["📖 Reading file...", "📖 File read complete"],
+    Write: ["✏️ Writing file...", "✏️ File write complete"],
+    Edit: ["✂️ Editing code...", "✂️ Code edit complete"],
+    Bash: ["⚙️ Running command...", "⚙️ Command complete"],
+    Glob: ["🔍 Searching files...", "🔍 File search complete"],
+    Grep: ["🔍 Searching code...", "🔍 Code search complete"],
+    WebFetch: ["🌐 Fetching web...", "🌐 Web fetch complete"],
+    WebSearch: ["🌐 Searching web...", "🌐 Web search complete"],
+    TodoWrite: ["📝 Saving todo...", "📝 Todo saved"],
+    NotebookEdit: ["📓 Editing notebook...", "📓 Notebook edit complete"],
   };
   const pair = labels[tool];
-  if (!pair) return status === "start" ? `🔧 ${tool} 실행 중...` : `🔧 ${tool} 완료`;
+  if (!pair) return status === "start" ? `🔧 ${tool} running...` : `🔧 ${tool} complete`;
   return status === "start" ? pair[0] : pair[1];
 }
 

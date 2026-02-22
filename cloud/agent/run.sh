@@ -1,8 +1,8 @@
 #!/bin/bash
 
-# VibeCheck Agent 실행 스크립트
+# VibeCheck Agent launch script
 
-# 인자 확인
+# Check arguments
 if [ -z "$1" ]; then
     echo "Usage: ./run.sh <API_KEY> [WORK_DIR]"
     echo ""

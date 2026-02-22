@@ -7,11 +7,11 @@ from config import WORK_DIR
 from security import get_trusted_paths, normalize_path
 
 # =============================================================================
-# Block Kit UI 빌더
+# Block Kit UI Builder
 # =============================================================================
 
 def build_approval_blocks(task_id: str, untrusted_paths: List[str], user_message: str) -> List[dict]:
-    """경로 승인 요청 Block Kit UI"""
+    """Path approval request Block Kit UI"""
     path_list = "\n".join([f"• `{p}`" for p in untrusted_paths])
 
     return [
@@ -19,7 +19,7 @@ def build_approval_blocks(task_id: str, untrusted_paths: List[str], user_message
             "type": "section",
             "text": {
                 "type": "mrkdwn",
-                "text": f"⚠️ *보안 경고*\n\nAI가 다음 경로에 접근하려고 합니다:\n{path_list}"
+                "text": f"⚠️ *Security Warning*\n\nAI is trying to access the following paths:\n{path_list}"
             }
         },
         {
@@ -27,7 +27,7 @@ def build_approval_blocks(task_id: str, untrusted_paths: List[str], user_message
             "elements": [
                 {
                     "type": "mrkdwn",
-                    "text": f"📝 요청: _{user_message[:100]}{'...' if len(user_message) > 100 else ''}_"
+                    "text": f"📝 Request: _{user_message[:100]}{'...' if len(user_message) > 100 else ''}_"
                 }
             ]
         },
@@ -36,20 +36,20 @@ def build_approval_blocks(task_id: str, untrusted_paths: List[str], user_message
             "elements": [
                 {
                     "type": "button",
-                    "text": {"type": "plain_text", "text": "✅ 승인 및 실행", "emoji": True},
+                    "text": {"type": "plain_text", "text": "✅ Approve & Run", "emoji": True},
                     "style": "primary",
                     "action_id": "approve_access",
                     "value": task_id
                 },
                 {
                     "type": "button",
-                    "text": {"type": "plain_text", "text": "✅ 승인 (영구)", "emoji": True},
+                    "text": {"type": "plain_text", "text": "✅ Approve (Permanent)", "emoji": True},
                     "action_id": "approve_permanent",
                     "value": task_id
                 },
                 {
                     "type": "button",
-                    "text": {"type": "plain_text", "text": "❌ 거절", "emoji": True},
+                    "text": {"type": "plain_text", "text": "❌ Deny", "emoji": True},
                     "style": "danger",
                     "action_id": "deny_access",
                     "value": task_id
@@ -60,7 +60,7 @@ def build_approval_blocks(task_id: str, untrusted_paths: List[str], user_message
 
 
 def build_message_with_delete_button(text: str, message_id: str = None) -> List[dict]:
-    """삭제 버튼이 있는 메시지 블록 생성"""
+    """Create message block with delete button"""
     if not message_id:
         message_id = str(uuid.uuid4())[:8]
 
@@ -84,13 +84,13 @@ def build_message_with_delete_button(text: str, message_id: str = None) -> List[
 
 
 def build_trusted_paths_blocks() -> List[dict]:
-    """신뢰 경로 목록 Block Kit UI"""
+    """Trusted paths list Block Kit UI"""
     paths = get_trusted_paths()
 
     blocks = [
         {
             "type": "header",
-            "text": {"type": "plain_text", "text": "🔐 신뢰할 수 있는 경로 목록", "emoji": True}
+            "text": {"type": "plain_text", "text": "🔐 Trusted Paths List", "emoji": True}
         },
         {"type": "divider"}
     ]
@@ -98,7 +98,7 @@ def build_trusted_paths_blocks() -> List[dict]:
     if not paths:
         blocks.append({
             "type": "section",
-            "text": {"type": "mrkdwn", "text": "_등록된 경로가 없습니다._"}
+            "text": {"type": "mrkdwn", "text": "_No registered paths._"}
         })
     else:
         for path in paths:
@@ -107,17 +107,17 @@ def build_trusted_paths_blocks() -> List[dict]:
                 "type": "section",
                 "text": {
                     "type": "mrkdwn",
-                    "text": f"📁 `{path}`" + (" _(기본)_" if is_default else "")
+                    "text": f"📁 `{path}`" + (" _(default)_" if is_default else "")
                 },
                 "accessory": {
                     "type": "button",
-                    "text": {"type": "plain_text", "text": "🗑️ 제거", "emoji": True},
+                    "text": {"type": "plain_text", "text": "🗑️ Remove", "emoji": True},
                     "style": "danger",
                     "action_id": "remove_trusted_path",
                     "value": path
                 } if not is_default else None
             })
-            # None accessory 제거
+            # Remove None accessory
             if blocks[-1]["accessory"] is None:
                 del blocks[-1]["accessory"]
 
@@ -125,7 +125,7 @@ def build_trusted_paths_blocks() -> List[dict]:
     blocks.append({
         "type": "context",
         "elements": [
-            {"type": "mrkdwn", "text": "💡 새 경로 추가: `/trust /path/to/folder`"}
+            {"type": "mrkdwn", "text": "💡 Add new path: `/trust /path/to/folder`"}
         ]
     })
 
