@@ -150,49 +150,53 @@ echo -e "  ${GREEN}Done${NC}"
 # =============================================================================
 
 echo ""
-echo -e "${BLUE}[5/5]${NC} Slack integration setup"
-echo ""
-echo "=========================================="
-echo "  Slack App tokens are required."
-echo "  Get them at https://api.slack.com/apps"
-echo "=========================================="
+echo -e "${BLUE}[5/5]${NC} Configuration"
 echo ""
 
-# Bot Token input
-echo "Slack Bot Token (starts with xoxb-)"
-read -p "  Bot Token: " BOT_TOKEN
-while [ -z "$BOT_TOKEN" ]; do
-    echo "  This is a required field."
-    read -p "  Bot Token: " BOT_TOKEN
-done
-
-echo ""
-
-# App Token input
-echo "Slack App Token (starts with xapp-, for Socket Mode)"
-read -p "  App Token: " APP_TOKEN
-while [ -z "$APP_TOKEN" ]; do
-    echo "  This is a required field."
-    read -p "  App Token: " APP_TOKEN
-done
-
-echo ""
-
-# Working directory input
+# Working directory input (required)
 DEFAULT_DIR=$(pwd)
 echo "Working directory path"
 read -p "  Working directory [$DEFAULT_DIR]: " WORK_DIR
 WORK_DIR=${WORK_DIR:-$DEFAULT_DIR}
 
+echo ""
+
+# Web port
+read -p "  Web UI port [8501]: " WEB_PORT
+WEB_PORT=${WEB_PORT:-8501}
+
+echo ""
+
+# Slack integration (optional)
+echo "=========================================="
+echo "  Slack integration (optional)"
+echo "  Press Enter to skip if not using Slack."
+echo "  Get tokens at https://api.slack.com/apps"
+echo "=========================================="
+echo ""
+
+read -p "  Slack Bot Token (xoxb-...): " BOT_TOKEN
+read -p "  Slack App Token (xapp-...): " APP_TOKEN
+
 # Generate .env file
 cat > .env << EOF
 # VibeCheck configuration
-# Auto-generated
 
+WORK_DIR=$WORK_DIR
+WEB_PORT=$WEB_PORT
+EOF
+
+if [ -n "$BOT_TOKEN" ] && [ -n "$APP_TOKEN" ]; then
+    cat >> .env << EOF
 SLACK_BOT_TOKEN=$BOT_TOKEN
 SLACK_APP_TOKEN=$APP_TOKEN
-WORK_DIR=$WORK_DIR
 EOF
+    echo ""
+    echo -e "  ${GREEN}Slack integration: enabled${NC}"
+else
+    echo ""
+    echo -e "  ${YELLOW}Slack integration: disabled (web-only mode)${NC}"
+fi
 
 echo ""
 echo -e "${GREEN}.env file has been created.${NC}"
@@ -212,6 +216,10 @@ if [ -n "$ACTIVATE_CMD" ]; then
     echo -e "  ${YELLOW}${ACTIVATE_CMD}${NC}"
 fi
 echo -e "  ${YELLOW}python main.py${NC}"
+echo ""
+echo "Then open in your browser:"
+echo ""
+echo -e "  ${YELLOW}http://localhost:${WEB_PORT}${NC}"
 echo ""
 echo "Or in one line:"
 echo ""

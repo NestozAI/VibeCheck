@@ -17,8 +17,8 @@
 | **🛠️ Self-Hosted (Open Source)** | **☁️ Cloud Version** |
 | :--- | :--- |
 | ✅ **Free** - use your own server | ⚡ **No server setup** - just install and go |
-| 💻 Full control over your environment | 🌐 Web-based chat interface |
-| 🔧 Self-installation & maintenance | 📦 `curl` one-liner install |
+| 🌐 Built-in web UI + optional Slack | 🌐 Web-based chat interface |
+| 💻 Full control over your environment | 📦 `curl` one-liner install |
 | [👇 **See installation guide below**](#self-hosted-setup) | [👉 **Get Started**](https://vibecheck.nestoz.co) |
 
 ---
@@ -191,7 +191,7 @@ ls, pwd, date, which, echo
 
 ## Self-Hosted Setup
 
-For users who want full control over their server and Slack app.
+For users who want full control over their own server. Includes a **built-in web UI** — no Slack required. Slack integration is available as an optional add-on.
 
 ### Quick Start
 
@@ -202,6 +202,7 @@ git clone https://github.com/NestozAI/VibeCheck
 cd VibeCheck/self-hosted
 ./setup.sh
 ./run.sh
+# Open http://localhost:8501 in your browser
 ```
 
 #### Windows
@@ -211,6 +212,7 @@ git clone https://github.com/NestozAI/VibeCheck
 cd VibeCheck\self-hosted
 setup.bat
 run.bat
+:: Open http://localhost:8501 in your browser
 ```
 
 <details>
@@ -288,7 +290,11 @@ VibeCheck/
 │   │       └── security.ts  # Path-based access control
 │   └── agent/               # Python agent (legacy, vibecheck-agent on PyPI)
 ├── self-hosted/
-│   ├── main.py              # Self-hosted Slack bot
+│   ├── main.py              # Entrypoint (starts web server + optional Slack)
+│   ├── core.py              # Transport-agnostic orchestration layer
+│   ├── web_server.py        # FastAPI + WebSocket server
+│   ├── slack_handler.py     # Optional Slack integration
+│   ├── static/index.html    # Web chat UI
 │   ├── setup.sh
 │   └── run.sh
 ├── assets/

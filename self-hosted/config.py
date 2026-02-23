@@ -18,15 +18,15 @@ logger = logging.getLogger("vibe-bot")
 # Environment variables
 # =============================================================================
 
-SLACK_BOT_TOKEN = os.environ.get("SLACK_BOT_TOKEN")
-SLACK_APP_TOKEN = os.environ.get("SLACK_APP_TOKEN")
-WORK_DIR = os.environ.get("WORK_DIR", os.getcwd())
-BOT_LANG = os.environ.get("BOT_LANG", "auto")  # auto, ko, en (auto = follow Slack locale)
+SLACK_BOT_TOKEN = os.environ.get("SLACK_BOT_TOKEN", "")
+SLACK_APP_TOKEN = os.environ.get("SLACK_APP_TOKEN", "")
+SLACK_ENABLED = bool(SLACK_BOT_TOKEN and SLACK_APP_TOKEN)
 
-if not SLACK_BOT_TOKEN:
-    raise ValueError("SLACK_BOT_TOKEN environment variable is not set.")
-if not SLACK_APP_TOKEN:
-    raise ValueError("SLACK_APP_TOKEN environment variable is not set.")
+WORK_DIR = os.environ.get("WORK_DIR", os.getcwd())
+BOT_LANG = os.environ.get("BOT_LANG", "en")
+
+WEB_PORT = int(os.environ.get("WEB_PORT", "8501"))
+WEB_HOST = os.environ.get("WEB_HOST", "0.0.0.0")
 
 # =============================================================================
 # Multilingual messages
@@ -83,28 +83,29 @@ def get_msg(key: str, lang: str = None) -> str:
 # Per-user language settings (can be changed via command)
 user_lang_override: Dict[str, str] = {}
 
-def get_user_lang(client, user_id: str) -> str:
+def get_user_lang(client=None, user_id: str = None) -> str:
     """Get user's language setting"""
     # 1. Prioritize language set by user via /lang command
-    if user_id in user_lang_override:
+    if user_id and user_id in user_lang_override:
         return user_lang_override[user_id]
 
     # 2. Use fixed language if BOT_LANG is not auto
     if BOT_LANG != "auto":
         return BOT_LANG
 
-    # 3. If auto, follow Slack locale
-    try:
-        result = client.users_info(user=user_id)
-        locale = result.get("user", {}).get("locale", "ko-KR")
-        lang = locale.split("-")[0] if locale else "ko"
-        if lang not in MESSAGES:
-            lang = "en" if lang != "ko" else "ko"
-        # logger.info(f"User {user_id} locale: {locale} -> {lang}")
-        return lang
-    except Exception as e:
-        logger.warning(f"Failed to look up user language: {e}")
-        return "ko"
+    # 3. If auto and Slack client available, follow Slack locale
+    if client and user_id:
+        try:
+            result = client.users_info(user=user_id)
+            locale = result.get("user", {}).get("locale", "en-US")
+            lang = locale.split("-")[0] if locale else "en"
+            if lang not in MESSAGES:
+                lang = "en"
+            return lang
+        except Exception as e:
+            logger.warning(f"Failed to look up user language: {e}")
+
+    return "en"
 
 # Safe read-only system commands (can run without approval)
 SAFE_SYSTEM_COMMANDS = {

@@ -66,43 +66,51 @@ echo   Packages installed
 :: =============================================================================
 
 echo.
-echo [4/4] Slack Integration Setup
-echo.
-echo ==========================================
-echo   You need Slack App tokens.
-echo   Get them at https://api.slack.com/apps
-echo ==========================================
-echo.
-
-:: Bot Token
-set /p BOT_TOKEN="Slack Bot Token (starts with xoxb-): "
-if "!BOT_TOKEN!"=="" (
-    echo   This field is required.
-    set /p BOT_TOKEN="Bot Token: "
-)
-
-echo.
-
-:: App Token
-set /p APP_TOKEN="Slack App Token (starts with xapp-): "
-if "!APP_TOKEN!"=="" (
-    echo   This field is required.
-    set /p APP_TOKEN="App Token: "
-)
-
+echo [4/4] Configuration
 echo.
 
 :: Work Directory
 set "DEFAULT_DIR=%cd%"
-set /p WORK_DIR="Work Directory [%DEFAULT_DIR%]: "
+set /p WORK_DIR="Working directory [%DEFAULT_DIR%]: "
 if "!WORK_DIR!"=="" set "WORK_DIR=%DEFAULT_DIR%"
+
+echo.
+
+:: Web port
+set /p WEB_PORT="Web UI port [8501]: "
+if "!WEB_PORT!"=="" set "WEB_PORT=8501"
+
+echo.
+echo ==========================================
+echo   Slack integration (optional)
+echo   Press Enter to skip if not using Slack.
+echo   Get tokens at https://api.slack.com/apps
+echo ==========================================
+echo.
+
+:: Bot Token (optional)
+set /p BOT_TOKEN="Slack Bot Token (xoxb-...): "
+
+:: App Token (optional)
+set /p APP_TOKEN="Slack App Token (xapp-...): "
 
 :: Create .env file
 (
-echo SLACK_BOT_TOKEN=!BOT_TOKEN!
-echo SLACK_APP_TOKEN=!APP_TOKEN!
 echo WORK_DIR=!WORK_DIR!
+echo WEB_PORT=!WEB_PORT!
 ) > .env
+
+if not "!BOT_TOKEN!"=="" if not "!APP_TOKEN!"=="" (
+    (
+    echo SLACK_BOT_TOKEN=!BOT_TOKEN!
+    echo SLACK_APP_TOKEN=!APP_TOKEN!
+    ) >> .env
+    echo.
+    echo   Slack integration: enabled
+) else (
+    echo.
+    echo   Slack integration: disabled (web-only mode^)
+)
 
 echo.
 echo .env file created successfully.
@@ -120,6 +128,10 @@ echo To run:
 echo.
 echo   conda activate %ENV_NAME%
 echo   python main.py
+echo.
+echo Then open in your browser:
+echo.
+echo   http://localhost:!WEB_PORT!
 echo.
 echo Or simply run:
 echo.
