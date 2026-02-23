@@ -19,7 +19,7 @@
 | ✅ **Free** - use your own server | ⚡ **No server setup** - just install and go |
 | 🌐 Built-in web UI + optional Slack | 🌐 Web-based chat interface |
 | 💻 Full control over your environment | 📦 `curl` one-liner install |
-| [👇 **See installation guide below**](#self-hosted-setup) | [👉 **Get Started**](https://vibecheck.nestoz.co) |
+| [👇 **See installation guide below**](#self-hosted-setup) | [👉 **Get Started**](https://vibecheck.sotaaz.com) |
 
 ---
 
@@ -48,12 +48,12 @@ The easiest way to use VibeCheck. No server setup needed!
 ### Quick Start
 
 #### 1. Sign In
-Visit [vibecheck.nestoz.co](https://vibecheck.nestoz.co) and sign in with your email.
+Visit [vibecheck.sotaaz.com](https://vibecheck.sotaaz.com) and sign in with your email.
 
 #### 2. Install & Run Agent
 Copy the one-liner curl command from dashboard and run it on your server:
 ```bash
-curl -sL https://vibecheck.nestoz.co/install/YOUR_API_KEY | bash
+curl -sL https://vibecheck.sotaaz.com/install/YOUR_API_KEY | bash
 ```
 
 That's it! Open the Chat page and start coding.
@@ -342,7 +342,7 @@ Contributions are welcome! Please open an issue or submit a pull request.
 ---
 
 <p align="center">
-  <a href="https://vibecheck.nestoz.co">
+  <a href="https://vibecheck.sotaaz.com">
     <img src="https://img.shields.io/badge/Try_VibeCheck_Cloud-00ff00?style=for-the-badge" alt="Try VibeCheck Cloud">
   </a>
 </p>

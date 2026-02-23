@@ -19,7 +19,7 @@
 | ✅ **무료** - 본인 서버 사용 | ⚡ **서버 설정 불필요** - 설치 즉시 사용 |
 | 💻 환경 완전 제어 | 🌐 웹 기반 채팅 인터페이스 |
 | 🔧 직접 설치 & 관리 | 📦 `curl` 원라이너 설치 |
-| [👇 **설치 가이드 보기**](#셀프-호스팅-설정) | [👉 **시작하기**](https://vibecheck.nestoz.co) |
+| [👇 **설치 가이드 보기**](#셀프-호스팅-설정) | [👉 **시작하기**](https://vibecheck.sotaaz.com) |
 
 ---
 
@@ -48,12 +48,12 @@
 ### 빠른 시작
 
 #### 1. 로그인
-[vibecheck.nestoz.co](https://vibecheck.nestoz.co)에서 이메일로 로그인합니다.
+[vibecheck.sotaaz.com](https://vibecheck.sotaaz.com)에서 이메일로 로그인합니다.
 
 #### 2. 에이전트 설치 & 실행
 대시보드에서 원클릭 curl 명령어를 복사해 서버에서 실행하세요:
 ```bash
-curl -sL https://vibecheck.nestoz.co/install/YOUR_API_KEY | bash
+curl -sL https://vibecheck.sotaaz.com/install/YOUR_API_KEY | bash
 ```
 
 끝입니다! Chat 페이지를 열고 코딩을 시작하세요.
@@ -331,7 +331,7 @@ MIT
 ---
 
 <p align="center">
-  <a href="https://vibecheck.nestoz.co">
+  <a href="https://vibecheck.sotaaz.com">
     <img src="https://img.shields.io/badge/VibeCheck_Cloud_시작하기-00ff00?style=for-the-badge" alt="Try VibeCheck Cloud">
   </a>
 </p>

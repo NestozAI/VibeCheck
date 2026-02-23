@@ -1,7 +1,7 @@
 import path from "node:path";
 import os from "node:os";
 
-export const DEFAULT_SERVER = "wss://vibecheck.nestoz.co/ws/agent";
+export const DEFAULT_SERVER = "wss://vibecheck.sotaaz.com/ws/agent";
 export const SESSION_DIR = path.join(os.homedir(), ".vibecheck");
 export const PING_INTERVAL_MS = 15_000;
 export const RECONNECT_DELAY_MS = 5_000;

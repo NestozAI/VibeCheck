@@ -27,7 +27,7 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://vibecheck.nestoz.co"
+Homepage = "https://vibecheck.sotaaz.com"
 Repository = "https://github.com/NestozAI/VibeCheck"
 
 [project.scripts]

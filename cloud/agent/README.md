@@ -14,15 +14,15 @@ pip install vibecheck-agent
 vibecheck-agent --key=YOUR_API_KEY
 ```
 
-API Key는 https://vibecheck.nestoz.co 에서 Slack 로그인 후 대시보드에서 확인할 수 있습니다.
+API Key는 https://vibecheck.sotaaz.com 에서 Slack 로그인 후 대시보드에서 확인할 수 있습니다.
 
 ## 옵션
 
 - `--key`, `-k`: API Key (필수)
 - `--dir`, `-d`: 작업 디렉토리 (기본: 현재 디렉토리)
-- `--server`, `-s`: 서버 URL (기본: wss://vibecheck.nestoz.co/ws/agent)
+- `--server`, `-s`: 서버 URL (기본: wss://vibecheck.sotaaz.com/ws/agent)
 
 ## 링크
 
-- 홈페이지: https://vibecheck.nestoz.co
+- 홈페이지: https://vibecheck.sotaaz.com
 - GitHub: https://github.com/NestozAI/VibeCheck

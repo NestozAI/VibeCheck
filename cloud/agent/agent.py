@@ -48,7 +48,7 @@ logger = logging.getLogger(__name__)
 # =============================================================================
 
 # Railway deployment URL
-DEFAULT_SERVER = "wss://vibecheck.nestoz.co/ws/agent"
+DEFAULT_SERVER = "wss://vibecheck.sotaaz.com/ws/agent"
 
 # Session file storage directory
 SESSION_DIR = os.path.expanduser("~/.vibecheck")
