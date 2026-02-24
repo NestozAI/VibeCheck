@@ -54,6 +54,12 @@ header {
   flex-shrink: 0;
 }
 
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .logo {
   display: flex;
   align-items: center;
@@ -74,6 +80,12 @@ header {
   font-size: 16px;
 }
 
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .status-dot {
   width: 8px;
   height: 8px;
@@ -83,6 +95,21 @@ header {
 }
 
 .status-dot.connected { background: var(--success); }
+
+.schedule-toggle {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  padding: 4px 10px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.schedule-toggle:hover { background: var(--bg-hover); color: var(--text-white); }
 
 /* Tool status bar */
 #tool-status {
@@ -99,6 +126,16 @@ header {
 
 #tool-status.visible { display: flex; }
 
+#tool-detail {
+  color: var(--text-secondary);
+  font-size: 12px;
+  margin-left: auto;
+  max-width: 300px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .spinner {
   width: 14px;
   height: 14px;
@@ -106,6 +143,7 @@ header {
   border-top-color: transparent;
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
+  flex-shrink: 0;
 }
 
 @keyframes spin { to { transform: rotate(360deg); } }
@@ -129,13 +167,8 @@ header {
 
 @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 
-.message.user {
-  align-self: flex-end;
-}
-
-.message.assistant {
-  align-self: flex-start;
-}
+.message.user { align-self: flex-end; }
+.message.assistant { align-self: flex-start; }
 
 .message-bubble {
   padding: 10px 14px;
@@ -163,6 +196,18 @@ header {
   color: var(--danger);
   border: 1px solid rgba(224, 30, 90, 0.3);
 }
+
+/* Response metadata */
+.message-meta {
+  display: flex;
+  gap: 12px;
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  padding: 0 4px;
+}
+
+.message-meta span { display: flex; align-items: center; gap: 3px; }
 
 /* Markdown-like rendering */
 .message-bubble strong { color: var(--text-white); }
@@ -265,6 +310,26 @@ footer {
   flex-shrink: 0;
 }
 
+.input-controls {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+  align-items: center;
+}
+
+.input-controls select {
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  padding: 4px 8px;
+  border-radius: var(--radius);
+  font-size: 12px;
+  cursor: pointer;
+  outline: none;
+}
+
+.input-controls select:focus { border-color: var(--accent); }
+
 .input-wrapper {
   display: flex;
   gap: 8px;
@@ -288,13 +353,11 @@ footer {
 }
 
 #input:focus { border-color: var(--accent); }
-
 #input::placeholder { color: var(--text-secondary); }
 
-#send-btn {
+.action-btn {
   width: 40px;
   height: 40px;
-  background: var(--accent);
   border: none;
   border-radius: var(--radius);
   color: white;
@@ -306,10 +369,21 @@ footer {
   transition: background 0.2s;
 }
 
+#send-btn {
+  background: var(--accent);
+}
+
 #send-btn:hover { background: var(--accent-hover); }
 #send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-
 #send-btn svg { width: 18px; height: 18px; }
+
+#stop-btn {
+  background: var(--danger);
+  display: none;
+}
+
+#stop-btn:hover { opacity: 0.9; }
+#stop-btn svg { width: 18px; height: 18px; }
 
 /* Approval modal */
 .modal-overlay {
@@ -379,6 +453,157 @@ footer {
 .btn-deny { background: var(--danger); color: white; }
 .btn-deny:hover { opacity: 0.9; }
 
+/* Schedule panel */
+#schedule-panel {
+  position: fixed;
+  top: 0;
+  right: -380px;
+  width: 380px;
+  height: 100%;
+  background: var(--bg-secondary);
+  border-left: 1px solid var(--border);
+  z-index: 90;
+  transition: right 0.3s ease;
+  display: flex;
+  flex-direction: column;
+}
+
+#schedule-panel.open { right: 0; }
+
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.panel-header h3 {
+  color: var(--text-white);
+  font-size: 16px;
+}
+
+.panel-close {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 20px;
+  padding: 0 4px;
+}
+
+.panel-close:hover { color: var(--text-white); }
+
+.panel-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 20px;
+}
+
+/* Schedule add form */
+.schedule-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.schedule-form input,
+.schedule-form select {
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  padding: 8px 12px;
+  border-radius: var(--radius);
+  font-size: 13px;
+  outline: none;
+}
+
+.schedule-form input:focus,
+.schedule-form select:focus { border-color: var(--accent); }
+
+.schedule-form input::placeholder { color: var(--text-secondary); }
+
+.schedule-form button {
+  background: var(--accent);
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.schedule-form button:hover { background: var(--accent-hover); }
+
+.schedule-form label {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+/* Schedule task items */
+.schedule-task {
+  background: var(--bg-primary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px;
+  margin-bottom: 8px;
+}
+
+.schedule-task-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.schedule-task-cron {
+  font-family: monospace;
+  font-size: 13px;
+  color: var(--accent);
+}
+
+.schedule-task-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.schedule-task-actions button {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  padding: 2px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 11px;
+}
+
+.schedule-task-actions button:hover { background: var(--bg-hover); color: var(--text-white); }
+.schedule-task-actions button.active { border-color: var(--success); color: var(--success); }
+.schedule-task-actions button.remove:hover { border-color: var(--danger); color: var(--danger); }
+
+.schedule-task-msg {
+  font-size: 13px;
+  color: var(--text-primary);
+  line-height: 1.4;
+}
+
+.schedule-task-skill {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-top: 4px;
+}
+
+.schedule-empty {
+  color: var(--text-secondary);
+  font-size: 13px;
+  text-align: center;
+  padding: 20px 0;
+}
+
 /* Welcome screen */
 .welcome {
   display: flex;
@@ -407,6 +632,8 @@ footer {
   header { padding: 10px 14px; }
   #messages { padding: 14px; }
   footer { padding: 10px 14px; }
+  .input-controls { flex-wrap: wrap; }
+  #schedule-panel { width: 100%; right: -100%; }
 }
 </style>
 </head>
@@ -414,16 +641,25 @@ footer {
 
 <div id="app">
   <header>
-    <div class="logo">
-      <div class="logo-icon">V</div>
-      VibeCheck
+    <div class="header-left">
+      <div class="logo">
+        <div class="logo-icon">V</div>
+        VibeCheck
+      </div>
     </div>
-    <div class="status-dot" id="status-dot" title="Disconnected"></div>
+    <div class="header-right">
+      <button class="schedule-toggle" id="schedule-btn" onclick="toggleSchedulePanel()" title="Scheduled Tasks">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+        Schedule
+      </button>
+      <div class="status-dot" id="status-dot" title="Disconnected"></div>
+    </div>
   </header>
 
   <div id="tool-status">
     <div class="spinner"></div>
     <span id="tool-label">Claude is thinking...</span>
+    <span id="tool-detail"></span>
   </div>
 
   <main id="messages">
@@ -434,11 +670,27 @@ footer {
   </main>
 
   <footer>
+    <div class="input-controls">
+      <select id="model-select" title="Model">
+        <option value="">Default Model</option>
+        <option value="claude-sonnet-4-20250514">Sonnet</option>
+        <option value="claude-opus-4-20250514">Opus</option>
+        <option value="claude-haiku-3-5-20241022">Haiku</option>
+      </select>
+      <select id="skill-select" title="Skill">
+        <option value="">No Skill</option>
+      </select>
+    </div>
     <div class="input-wrapper">
       <textarea id="input" rows="1" placeholder="Send a message..." autofocus></textarea>
-      <button id="send-btn" title="Send (Enter)">
+      <button class="action-btn" id="send-btn" title="Send (Enter)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/>
+        </svg>
+      </button>
+      <button class="action-btn" id="stop-btn" title="Stop">
+        <svg viewBox="0 0 24 24" fill="currentColor">
+          <rect x="6" y="6" width="12" height="12" rx="2"/>
         </svg>
       </button>
     </div>
@@ -459,25 +711,62 @@ footer {
   </div>
 </div>
 
+<!-- Schedule panel -->
+<div id="schedule-panel">
+  <div class="panel-header">
+    <h3>Scheduled Tasks</h3>
+    <button class="panel-close" onclick="toggleSchedulePanel()">&times;</button>
+  </div>
+  <div class="panel-body">
+    <div class="schedule-form">
+      <label>Cron Expression</label>
+      <input type="text" id="sched-cron" placeholder="*/30 * * * * (every 30 min)">
+      <label>Message</label>
+      <input type="text" id="sched-message" placeholder="Check server health">
+      <label>Skill (optional)</label>
+      <select id="sched-skill">
+        <option value="">None</option>
+      </select>
+      <button onclick="addScheduleTask()">Add Task</button>
+    </div>
+    <div id="schedule-list">
+      <div class="schedule-empty">No scheduled tasks</div>
+    </div>
+  </div>
+</div>
+
 <script>
 // ============================================================
-// WebSocket Client
+// State
 // ============================================================
 
 let ws = null;
 let reconnectTimer = null;
-let pendingApprovalId = null;
+let isProcessing = false;
+let streamingBubble = null;
+let streamingText = '';
+let skills = [];
 
-const messagesEl = document.getElementById('messages');
-const inputEl = document.getElementById('input');
-const sendBtn = document.getElementById('send-btn');
-const statusDot = document.getElementById('status-dot');
-const toolStatus = document.getElementById('tool-status');
-const toolLabel = document.getElementById('tool-label');
-const welcomeEl = document.getElementById('welcome');
-const approvalModal = document.getElementById('approval-modal');
-const modalPaths = document.getElementById('modal-paths');
-const modalMessage = document.getElementById('modal-message');
+const $ = (id) => document.getElementById(id);
+const messagesEl = $('messages');
+const inputEl = $('input');
+const sendBtn = $('send-btn');
+const stopBtn = $('stop-btn');
+const statusDot = $('status-dot');
+const toolStatus = $('tool-status');
+const toolLabel = $('tool-label');
+const toolDetail = $('tool-detail');
+const welcomeEl = $('welcome');
+const approvalModal = $('approval-modal');
+const modalPaths = $('modal-paths');
+const modalMessage = $('modal-message');
+const modelSelect = $('model-select');
+const skillSelect = $('skill-select');
+const schedulePanel = $('schedule-panel');
+
+// ============================================================
+// WebSocket
+// ============================================================
 
 function connect() {
   const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -487,6 +776,8 @@ function connect() {
     statusDot.classList.add('connected');
     statusDot.title = 'Connected';
     clearTimeout(reconnectTimer);
+    // Load skills on connect
+    send({ type: 'skill_list' });
   };
 
   ws.onclose = () => {
@@ -495,9 +786,7 @@ function connect() {
     reconnectTimer = setTimeout(connect, 3000);
   };
 
-  ws.onerror = () => {
-    ws.close();
-  };
+  ws.onerror = () => ws.close();
 
   ws.onmessage = (event) => {
     const msg = JSON.parse(event.data);
@@ -517,30 +806,135 @@ function send(obj) {
 
 function handleMessage(msg) {
   switch (msg.type) {
+    case 'streaming_chunk':
+      handleStreamingChunk(msg.delta, msg.index);
+      break;
+
     case 'response':
+      finalizeStreaming();
       hideThinking();
       hideToolStatus();
-      addMessage('assistant', msg.result, msg.images);
+      setProcessing(false);
+      addMessage('assistant', msg.result, msg.images, {
+        cost_usd: msg.cost_usd,
+        num_turns: msg.num_turns,
+        usage: msg.usage,
+      });
       break;
+
     case 'tool_status':
       if (msg.status === 'start') {
-        showToolStatus(msg.label);
+        showToolStatus(msg.label, msg.detail);
       } else {
         hideToolStatus();
       }
       break;
+
     case 'approval_required':
       hideThinking();
       hideToolStatus();
       showApproval(msg);
       break;
+
     case 'error':
+      finalizeStreaming();
       hideThinking();
       hideToolStatus();
+      setProcessing(false);
       addMessage('error', msg.message);
       break;
+
+    case 'skill_list_response':
+      skills = msg.skills || [];
+      populateSkills();
+      break;
+
+    case 'schedule_list_response':
+      renderScheduleList(msg.tasks || []);
+      break;
+
+    case 'schedule_add_response':
+      if (msg.success) {
+        $('sched-cron').value = '';
+        $('sched-message').value = '';
+        send({ type: 'schedule_list' });
+      } else {
+        alert('Failed to add task: ' + (msg.error || 'unknown error'));
+      }
+      break;
+
     case 'pong':
       break;
+  }
+}
+
+// ============================================================
+// Streaming
+// ============================================================
+
+function handleStreamingChunk(delta, index) {
+  hideThinking();
+
+  if (!streamingBubble) {
+    if (welcomeEl && welcomeEl.parentNode) welcomeEl.remove();
+    const msgEl = document.createElement('div');
+    msgEl.className = 'message assistant';
+    msgEl.id = 'streaming-msg';
+
+    streamingBubble = document.createElement('div');
+    streamingBubble.className = 'message-bubble';
+    msgEl.appendChild(streamingBubble);
+
+    messagesEl.appendChild(msgEl);
+    streamingText = '';
+  }
+
+  streamingText += delta;
+  streamingBubble.innerHTML = renderMarkdown(streamingText);
+  scrollToBottom();
+}
+
+function finalizeStreaming() {
+  if (streamingBubble) {
+    const streamingMsg = $('streaming-msg');
+    if (streamingMsg) streamingMsg.remove();
+    streamingBubble = null;
+    streamingText = '';
+  }
+}
+
+// ============================================================
+// Processing state
+// ============================================================
+
+function setProcessing(val) {
+  isProcessing = val;
+  sendBtn.style.display = val ? 'none' : 'flex';
+  stopBtn.style.display = val ? 'flex' : 'none';
+  inputEl.disabled = val;
+}
+
+// ============================================================
+// Skills
+// ============================================================
+
+function populateSkills() {
+  // Main skill select
+  skillSelect.innerHTML = '<option value="">No Skill</option>';
+  // Schedule skill select
+  const schedSkill = $('sched-skill');
+  schedSkill.innerHTML = '<option value="">None</option>';
+
+  for (const s of skills) {
+    const opt1 = document.createElement('option');
+    opt1.value = s.id;
+    opt1.textContent = `${s.icon} ${s.name}`;
+    skillSelect.appendChild(opt1);
+
+    const opt2 = document.createElement('option');
+    opt2.value = s.id;
+    opt2.textContent = `${s.icon} ${s.name}`;
+    schedSkill.appendChild(opt2);
   }
 }
 
@@ -548,8 +942,8 @@ function handleMessage(msg) {
 // UI: Messages
 // ============================================================
 
-function addMessage(role, text, images) {
-  if (welcomeEl) welcomeEl.remove();
+function addMessage(role, text, images, meta) {
+  if (welcomeEl && welcomeEl.parentNode) welcomeEl.remove();
 
   const msg = document.createElement('div');
   msg.className = `message ${role}`;
@@ -559,6 +953,7 @@ function addMessage(role, text, images) {
   bubble.innerHTML = renderMarkdown(text);
   msg.appendChild(bubble);
 
+  // Images
   if (images && images.length > 0) {
     const imgContainer = document.createElement('div');
     imgContainer.className = 'message-images';
@@ -573,13 +968,41 @@ function addMessage(role, text, images) {
     msg.appendChild(imgContainer);
   }
 
+  // Response metadata (cost, tokens, turns)
+  if (meta && role === 'assistant') {
+    const metaEl = document.createElement('div');
+    metaEl.className = 'message-meta';
+    const parts = [];
+    if (meta.cost_usd !== undefined) {
+      parts.push(`<span>$${meta.cost_usd.toFixed(4)}</span>`);
+    }
+    if (meta.num_turns !== undefined) {
+      parts.push(`<span>${meta.num_turns} turn${meta.num_turns !== 1 ? 's' : ''}</span>`);
+    }
+    if (meta.usage) {
+      const totalIn = (meta.usage.input_tokens || 0) + (meta.usage.cache_read_input_tokens || 0) + (meta.usage.cache_creation_input_tokens || 0);
+      const totalOut = meta.usage.output_tokens || 0;
+      parts.push(`<span>${formatTokens(totalIn)} in / ${formatTokens(totalOut)} out</span>`);
+    }
+    if (parts.length > 0) {
+      metaEl.innerHTML = parts.join('<span style="opacity:0.3">|</span>');
+      msg.appendChild(metaEl);
+    }
+  }
+
   messagesEl.appendChild(msg);
   scrollToBottom();
 }
 
+function formatTokens(n) {
+  if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M';
+  if (n >= 1000) return (n / 1000).toFixed(1) + 'k';
+  return String(n);
+}
+
 function showThinking() {
-  if (document.getElementById('thinking')) return;
-  if (welcomeEl) welcomeEl.remove();
+  if ($('thinking')) return;
+  if (welcomeEl && welcomeEl.parentNode) welcomeEl.remove();
 
   const msg = document.createElement('div');
   msg.className = 'message assistant';
@@ -595,17 +1018,19 @@ function showThinking() {
 }
 
 function hideThinking() {
-  const el = document.getElementById('thinking');
+  const el = $('thinking');
   if (el) el.remove();
 }
 
-function showToolStatus(label) {
+function showToolStatus(label, detail) {
   toolLabel.textContent = label;
+  toolDetail.textContent = detail || '';
   toolStatus.classList.add('visible');
 }
 
 function hideToolStatus() {
   toolStatus.classList.remove('visible');
+  toolDetail.textContent = '';
 }
 
 function scrollToBottom() {
@@ -617,28 +1042,92 @@ function scrollToBottom() {
 // ============================================================
 
 function showApproval(data) {
-  pendingApprovalId = data.task_id;
   modalPaths.textContent = data.paths.join('\n');
   modalMessage.textContent = `Request: ${data.message}`;
   approvalModal.classList.add('visible');
 }
 
 function sendApproval(approved, permanent) {
-  send({ type: 'approval', task_id: pendingApprovalId, approved, permanent });
+  send({ type: 'approval', approved, permanent });
   approvalModal.classList.remove('visible');
-  pendingApprovalId = null;
   if (approved) showThinking();
+}
+
+// ============================================================
+// UI: Schedule panel
+// ============================================================
+
+function toggleSchedulePanel() {
+  const isOpen = schedulePanel.classList.toggle('open');
+  if (isOpen) {
+    send({ type: 'schedule_list' });
+  }
+}
+
+function addScheduleTask() {
+  const cron = $('sched-cron').value.trim();
+  const message = $('sched-message').value.trim();
+  const skillId = $('sched-skill').value || undefined;
+
+  if (!cron || !message) {
+    alert('Cron expression and message are required');
+    return;
+  }
+
+  send({ type: 'schedule_add', cron, message, skill_id: skillId });
+}
+
+function renderScheduleList(tasks) {
+  const container = $('schedule-list');
+  if (tasks.length === 0) {
+    container.innerHTML = '<div class="schedule-empty">No scheduled tasks</div>';
+    return;
+  }
+
+  container.innerHTML = tasks.map(t => `
+    <div class="schedule-task">
+      <div class="schedule-task-header">
+        <span class="schedule-task-cron">${escapeHtml(t.cron)}</span>
+        <div class="schedule-task-actions">
+          <button class="${t.enabled ? 'active' : ''}"
+                  onclick="toggleScheduleTask('${t.id}', ${!t.enabled})">
+            ${t.enabled ? 'ON' : 'OFF'}
+          </button>
+          <button class="remove" onclick="removeScheduleTask('${t.id}')">Remove</button>
+        </div>
+      </div>
+      <div class="schedule-task-msg">${escapeHtml(t.message)}</div>
+      ${t.skill_id ? `<div class="schedule-task-skill">Skill: ${escapeHtml(t.skill_id)}</div>` : ''}
+    </div>
+  `).join('');
+}
+
+function toggleScheduleTask(id, enabled) {
+  send({ type: 'schedule_toggle', id, enabled });
+  setTimeout(() => send({ type: 'schedule_list' }), 200);
+}
+
+function removeScheduleTask(id) {
+  if (confirm('Remove this scheduled task?')) {
+    send({ type: 'schedule_remove', id });
+    setTimeout(() => send({ type: 'schedule_list' }), 200);
+  }
 }
 
 // ============================================================
 // Markdown-lite rendering
 // ============================================================
 
+function escapeHtml(text) {
+  if (!text) return '';
+  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
 function renderMarkdown(text) {
   if (!text) return '';
 
   // Escape HTML first
-  text = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  text = escapeHtml(text);
 
   // Code blocks: ```lang\n...\n```
   text = text.replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) => {
@@ -665,7 +1154,7 @@ function renderMarkdown(text) {
 }
 
 function copyCode(id) {
-  const el = document.getElementById(id);
+  const el = $(id);
   if (el) {
     navigator.clipboard.writeText(el.textContent).then(() => {
       const btn = el.parentElement.querySelector('.copy-btn');
@@ -683,14 +1172,26 @@ function copyCode(id) {
 
 function sendMessage() {
   const text = inputEl.value.trim();
-  if (!text) return;
+  if (!text || isProcessing) return;
 
   addMessage('user', text);
-  send({ type: 'query', message: text });
+
+  const payload = { type: 'query', message: text };
+  const model = modelSelect.value;
+  const skillId = skillSelect.value;
+  if (model) payload.model = model;
+  if (skillId) payload.skill_id = skillId;
+
+  send(payload);
   showThinking();
+  setProcessing(true);
 
   inputEl.value = '';
   inputEl.style.height = 'auto';
+}
+
+function stopProcessing() {
+  send({ type: 'interrupt' });
 }
 
 inputEl.addEventListener('keydown', (e) => {
@@ -706,8 +1207,12 @@ inputEl.addEventListener('input', () => {
 });
 
 sendBtn.addEventListener('click', sendMessage);
+stopBtn.addEventListener('click', stopProcessing);
 
-// Start connection
+// ============================================================
+// Init
+// ============================================================
+
 connect();
 
 // Ping keepalive

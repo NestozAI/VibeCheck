@@ -1,227 +1,113 @@
 #!/bin/bash
-
-# =============================================================================
-# VibeCheck - Setup Script
-# =============================================================================
-
 set -e
 
-echo ""
-echo "=========================================="
-echo "  VibeCheck Setup"
-echo "=========================================="
-echo ""
-
-# Color definitions
+# Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
-NC='\033[0m' # No Color
-
-# Check current directory
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-cd "$SCRIPT_DIR"
-
-VENV_DIR=".venv"
-CONDA_ENV="vibecheck"
-
-# =============================================================================
-# Check Python
-# =============================================================================
-
-echo -e "${BLUE}[1/5]${NC} Checking Python..."
-
-PYTHON_CMD=""
-for cmd in python3 python; do
-    if command -v "$cmd" &> /dev/null; then
-        version=$("$cmd" --version 2>&1 | grep -oP '\d+\.\d+' | head -1)
-        major=$(echo "$version" | cut -d. -f1)
-        minor=$(echo "$version" | cut -d. -f2)
-        if [ "$major" -ge 3 ] && [ "$minor" -ge 8 ]; then
-            PYTHON_CMD="$cmd"
-            break
-        fi
-    fi
-done
-
-if [ -z "$PYTHON_CMD" ]; then
-    echo -e "${RED}Error: Python 3.8+ is required.${NC}"
-    echo "Please install Python: https://www.python.org/downloads/"
-    exit 1
-fi
-
-echo -e "  ${GREEN}$($PYTHON_CMD --version) found${NC}"
-
-# =============================================================================
-# Create virtual environment (venv -> conda -> system pip order)
-# =============================================================================
+NC='\033[0m'
 
 echo ""
-echo -e "${BLUE}[2/5]${NC} Setting up virtual environment..."
+echo -e "${BLUE}╔══════════════════════════════════════╗${NC}"
+echo -e "${BLUE}║     VibeCheck Self-Hosted Setup      ║${NC}"
+echo -e "${BLUE}╚══════════════════════════════════════╝${NC}"
+echo ""
 
-ENV_MODE=""  # "venv", "conda", or "system"
-ACTIVATE_CMD=""
+# ------------------------------------------------------------------
+# 1. Check Node.js
+# ------------------------------------------------------------------
+echo -e "${YELLOW}[1/4] Checking Node.js...${NC}"
 
-# --- 1) Try venv ---
-if [ -d "$VENV_DIR" ]; then
-    echo -e "  ${YELLOW}Existing venv environment found, reusing.${NC}"
-    source "$VENV_DIR/bin/activate"
-    ENV_MODE="venv"
-    ACTIVATE_CMD="source $VENV_DIR/bin/activate"
+if ! command -v node &> /dev/null; then
+  echo -e "${RED}Node.js is not installed.${NC}"
+  echo "Install Node.js 18+ from https://nodejs.org/ or via nvm:"
+  echo "  curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash"
+  echo "  nvm install 20"
+  exit 1
+fi
+
+NODE_VERSION=$(node -v | sed 's/v//' | cut -d. -f1)
+if [ "$NODE_VERSION" -lt 18 ]; then
+  echo -e "${RED}Node.js 18+ required. Current: $(node -v)${NC}"
+  echo "Update via nvm: nvm install 20 && nvm use 20"
+  exit 1
+fi
+
+echo -e "${GREEN}  Node.js $(node -v) ✓${NC}"
+
+# ------------------------------------------------------------------
+# 2. Install dependencies
+# ------------------------------------------------------------------
+echo -e "${YELLOW}[2/4] Installing dependencies...${NC}"
+
+npm install
+
+echo -e "${GREEN}  Dependencies installed ✓${NC}"
+
+# ------------------------------------------------------------------
+# 3. Configure .env
+# ------------------------------------------------------------------
+echo -e "${YELLOW}[3/4] Configuring environment...${NC}"
+
+if [ -f .env ]; then
+  echo -e "  .env already exists. Skipping."
 else
-    if "$PYTHON_CMD" -m venv "$VENV_DIR" 2>/dev/null; then
-        echo -e "  ${GREEN}venv environment created${NC}"
-        source "$VENV_DIR/bin/activate"
-        ENV_MODE="venv"
-        ACTIVATE_CMD="source $VENV_DIR/bin/activate"
-    else
-        echo -e "  ${YELLOW}venv unavailable${NC}"
+  cp .env.example .env
+  echo ""
 
-        # Hint for missing python3-venv on Ubuntu/Debian
-        if command -v apt &> /dev/null; then
-            echo -e "  ${YELLOW}Hint: install with sudo apt install python3-venv${NC}"
-        fi
+  # Working directory
+  read -p "  Working directory (default: current dir): " WORK_DIR
+  if [ -n "$WORK_DIR" ]; then
+    sed -i "s|WORK_DIR=.|WORK_DIR=$WORK_DIR|" .env
+  fi
 
-        # --- 2) conda fallback ---
-        if command -v conda &> /dev/null; then
-            echo -e "  ${BLUE}Falling back to conda...${NC}"
-            if conda env list 2>/dev/null | grep -q "^$CONDA_ENV "; then
-                echo -e "  ${YELLOW}Existing conda environment found, reusing.${NC}"
-            else
-                if conda create -n "$CONDA_ENV" python=3.11 -y 2>/dev/null; then
-                    echo -e "  ${GREEN}conda environment created${NC}"
-                else
-                    echo -e "  ${YELLOW}conda environment creation failed${NC}"
-                fi
-            fi
+  # Port
+  read -p "  Web port (default: 8501): " PORT
+  if [ -n "$PORT" ]; then
+    sed -i "s|WEB_PORT=8501|WEB_PORT=$PORT|" .env
+  fi
 
-            # Try activating conda
-            if eval "$(conda shell.bash hook 2>/dev/null)" && conda activate "$CONDA_ENV" 2>/dev/null; then
-                ENV_MODE="conda"
-                ACTIVATE_CMD="conda activate $CONDA_ENV"
-            else
-                echo -e "  ${YELLOW}conda activation failed${NC}"
-            fi
-        fi
+  # Language
+  read -p "  Language (en/ko, default: en): " LANG
+  if [ -n "$LANG" ]; then
+    sed -i "s|BOT_LANG=en|BOT_LANG=$LANG|" .env
+  fi
 
-        # --- 3) System pip fallback ---
-        if [ -z "$ENV_MODE" ]; then
-            echo -e "  ${YELLOW}⚠ Installing directly to system pip without virtual environment.${NC}"
-            ENV_MODE="system"
-            ACTIVATE_CMD=""
-        fi
-    fi
+  # Slack
+  echo ""
+  read -p "  Enable Slack integration? (y/N): " SLACK
+  if [[ "$SLACK" =~ ^[Yy]$ ]]; then
+    read -p "  Slack Bot Token (xoxb-...): " BOT_TOKEN
+    read -p "  Slack App Token (xapp-...): " APP_TOKEN
+    sed -i "s|SLACK_BOT_TOKEN=|SLACK_BOT_TOKEN=$BOT_TOKEN|" .env
+    sed -i "s|SLACK_APP_TOKEN=|SLACK_APP_TOKEN=$APP_TOKEN|" .env
+  fi
+
+  echo -e "${GREEN}  .env configured ✓${NC}"
 fi
 
-echo -e "  ${GREEN}Environment mode: ${ENV_MODE}${NC}"
+# ------------------------------------------------------------------
+# 4. Build
+# ------------------------------------------------------------------
+echo -e "${YELLOW}[4/4] Building...${NC}"
 
-# =============================================================================
-# Install dependencies
-# =============================================================================
+npm run build
 
+echo -e "${GREEN}  Build complete ✓${NC}"
+
+# ------------------------------------------------------------------
+# Done
+# ------------------------------------------------------------------
 echo ""
-echo -e "${BLUE}[3/5]${NC} Installing dependencies..."
-
-PIP_FLAGS="-q"
-if [ "$ENV_MODE" = "system" ]; then
-    PIP_FLAGS="$PIP_FLAGS --user"
-fi
-
-pip install --upgrade pip $PIP_FLAGS
-pip install -r requirements.txt $PIP_FLAGS
-
-echo -e "  ${GREEN}Package installation complete${NC}"
-
-# =============================================================================
-# Install Playwright browser
-# =============================================================================
-
+echo -e "${GREEN}╔══════════════════════════════════════╗${NC}"
+echo -e "${GREEN}║         Setup Complete!               ║${NC}"
+echo -e "${GREEN}╚══════════════════════════════════════╝${NC}"
 echo ""
-echo -e "${BLUE}[4/5]${NC} Installing Playwright browser (for UI screenshots)..."
-
-playwright install chromium --with-deps 2>/dev/null || playwright install chromium 2>/dev/null || \
-    echo -e "  ${YELLOW}Playwright installation skipped (screenshot feature unavailable)${NC}"
-
-echo -e "  ${GREEN}Done${NC}"
-
-# =============================================================================
-# Configure environment variables
-# =============================================================================
-
-echo ""
-echo -e "${BLUE}[5/5]${NC} Configuration"
+echo "  Start:  npm start"
+echo "  Dev:    npm run dev"
 echo ""
 
-# Working directory input (required)
-DEFAULT_DIR=$(pwd)
-echo "Working directory path"
-read -p "  Working directory [$DEFAULT_DIR]: " WORK_DIR
-WORK_DIR=${WORK_DIR:-$DEFAULT_DIR}
-
-echo ""
-
-# Web port
-read -p "  Web UI port [8501]: " WEB_PORT
-WEB_PORT=${WEB_PORT:-8501}
-
-echo ""
-
-# Slack integration (optional)
-echo "=========================================="
-echo "  Slack integration (optional)"
-echo "  Press Enter to skip if not using Slack."
-echo "  Get tokens at https://api.slack.com/apps"
-echo "=========================================="
-echo ""
-
-read -p "  Slack Bot Token (xoxb-...): " BOT_TOKEN
-read -p "  Slack App Token (xapp-...): " APP_TOKEN
-
-# Generate .env file
-cat > .env << EOF
-# VibeCheck configuration
-
-WORK_DIR=$WORK_DIR
-WEB_PORT=$WEB_PORT
-EOF
-
-if [ -n "$BOT_TOKEN" ] && [ -n "$APP_TOKEN" ]; then
-    cat >> .env << EOF
-SLACK_BOT_TOKEN=$BOT_TOKEN
-SLACK_APP_TOKEN=$APP_TOKEN
-EOF
-    echo ""
-    echo -e "  ${GREEN}Slack integration: enabled${NC}"
-else
-    echo ""
-    echo -e "  ${YELLOW}Slack integration: disabled (web-only mode)${NC}"
-fi
-
-echo ""
-echo -e "${GREEN}.env file has been created.${NC}"
-
-# =============================================================================
-# Complete
-# =============================================================================
-
-echo ""
-echo "=========================================="
-echo -e "  ${GREEN}Setup complete!${NC}"
-echo "=========================================="
-echo ""
-echo "How to run:"
-echo ""
-if [ -n "$ACTIVATE_CMD" ]; then
-    echo -e "  ${YELLOW}${ACTIVATE_CMD}${NC}"
-fi
-echo -e "  ${YELLOW}python main.py${NC}"
-echo ""
-echo "Then open in your browser:"
-echo ""
-echo -e "  ${YELLOW}http://localhost:${WEB_PORT}${NC}"
-echo ""
-echo "Or in one line:"
-echo ""
-echo -e "  ${YELLOW}./run.sh${NC}"
+PORT=${PORT:-8501}
+echo -e "  Web UI: ${BLUE}http://localhost:${PORT}${NC}"
 echo ""

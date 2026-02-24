@@ -195,24 +195,21 @@ For users who want full control over their own server. Includes a **built-in web
 
 ### Quick Start
 
-#### Linux / macOS
-
 ```bash
 git clone https://github.com/NestozAI/VibeCheck
 cd VibeCheck/self-hosted
 ./setup.sh
-./run.sh
 # Open http://localhost:8501 in your browser
 ```
 
-#### Windows
+Or manually:
 
-```cmd
+```bash
 git clone https://github.com/NestozAI/VibeCheck
-cd VibeCheck\self-hosted
-setup.bat
-run.bat
-:: Open http://localhost:8501 in your browser
+cd VibeCheck/self-hosted
+npm install
+cp .env.example .env   # edit as needed
+npm run dev
 ```
 
 <details>
@@ -280,27 +277,38 @@ WORK_DIR=/path/to/your/project
 ```
 VibeCheck/
 ├── cloud/
-│   ├── agent-ts/            # TypeScript agent (actively maintained)
+│   ├── agent-ts/             # TypeScript cloud agent (npm: vibecheck-agent)
 │   │   └── src/
-│   │       ├── agent.ts     # Main WebSocket agent, skill & scheduler integration
-│   │       ├── claude.ts    # Claude Agent SDK wrapper (streaming, tools, sessions)
-│   │       ├── protocol.ts  # WebSocket message type definitions
-│   │       ├── skills.ts    # Built-in skill presets
-│   │       ├── scheduler.ts # Cron-based task scheduler
-│   │       └── security.ts  # Path-based access control
-│   └── agent/               # Python agent (legacy, vibecheck-agent on PyPI)
-├── self-hosted/
-│   ├── main.py              # Entrypoint (starts web server + optional Slack)
-│   ├── core.py              # Transport-agnostic orchestration layer
-│   ├── web_server.py        # FastAPI + WebSocket server
-│   ├── slack_handler.py     # Optional Slack integration
-│   ├── static/index.html    # Web chat UI
-│   ├── setup.sh
-│   └── run.sh
+│   │       ├── agent.ts      # WebSocket agent, skill & scheduler integration
+│   │       ├── claude.ts     # Claude Agent SDK wrapper (streaming, tools)
+│   │       ├── protocol.ts   # WebSocket message type definitions
+│   │       ├── skills.ts     # Built-in skill presets
+│   │       ├── scheduler.ts  # Cron-based task scheduler
+│   │       └── security.ts   # Path-based access control
+│   └── agent/                # Python agent (legacy)
+├── self-hosted/           # Self-hosted TypeScript version
+│   ├── src/
+│   │   ├── index.ts          # Entry point
+│   │   ├── config.ts         # Environment config + i18n
+│   │   ├── core.ts           # Transport-agnostic orchestration
+│   │   ├── server.ts         # Express + WebSocket server
+│   │   ├── cleaner.ts        # Output sanitization
+│   │   ├── protocol.ts       # WebSocket message types
+│   │   ├── shared/           # Shared modules (from cloud/agent-ts)
+│   │   │   ├── claude.ts     # Claude Agent SDK wrapper
+│   │   │   ├── security.ts   # Path-based access control
+│   │   │   ├── skills.ts     # Skill presets
+│   │   │   ├── scheduler.ts  # Cron task scheduler
+│   │   │   ├── images.ts     # Image tracking
+│   │   │   ├── screenshot.ts # Playwright screenshots
+│   │   │   └── session.ts    # Session persistence
+│   │   └── slack/            # Optional Slack integration
+│   │       ├── handler.ts    # @slack/bolt Socket Mode
+│   │       └── ui-builder.ts # Block Kit UI builders
+│   ├── static/index.html     # Web chat UI
+│   └── setup.sh
+├── self-hosted/              # Python version (legacy)
 ├── assets/
-│   ├── architecture.png
-│   ├── ux_demo.png
-│   └── security_flow.png
 └── README.md
 ```
 
@@ -308,9 +316,9 @@ VibeCheck/
 
 ## Requirements
 
-- Node.js 18+ (TypeScript agent) or Python 3.8+ (legacy agent)
+- Node.js 18+
 - Claude Code CLI (`claude` command in PATH)
-- Web browser (Cloud version) or Slack workspace (Self-hosted)
+- Web browser
 
 ---
 
