@@ -78,6 +78,23 @@ export function createSlackApp(core: VibeCheckCore) {
     // Delegate to core with Slack-specific callbacks
     let thinkingTs: string | null = null;
 
+    // Wire security approval to Slack (must be set before calling handleQuery)
+    core.security.onApprovalNeeded = async (paths, toolName, input) => {
+      const blocks = buildApprovalBlocks(
+        toolName,
+        paths,
+        `${toolName}: ${JSON.stringify(input).slice(0, 100)}`,
+      );
+      await say({ blocks, text: "Security approval required", thread_ts: threadTs });
+    };
+
+    // Send thinking message BEFORE starting the query
+    const thinkingResult = await say({
+      text: getMsg("thinking", lang),
+      thread_ts: threadTs,
+    });
+    thinkingTs = (thinkingResult as Record<string, unknown>)?.ts as string ?? null;
+
     await core.handleQuery(
       userMessage,
       {
@@ -113,15 +130,6 @@ export function createSlackApp(core: VibeCheckCore) {
         },
       },
     );
-
-    // Post thinking message before the core call resolves
-    // Note: Since handleQuery is async and we don't have streaming in Slack,
-    // the "thinking" message is sent before the call.
-    const thinkingResult = await say({
-      text: getMsg("thinking", lang),
-      thread_ts: threadTs,
-    });
-    thinkingTs = (thinkingResult as Record<string, unknown>)?.ts as string ?? null;
   }
 
   // ------------------------------------------------------------------

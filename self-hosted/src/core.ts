@@ -220,7 +220,7 @@ export class VibeCheckCore {
 
       console.log(
         `[core] Response: ${cleaned.length} chars, ${images.length} images` +
-          (execResult.cost_usd !== undefined ? `, $${execResult.cost_usd.toFixed(4)}` : ""),
+        (execResult.cost_usd !== undefined ? `, $${execResult.cost_usd.toFixed(4)}` : ""),
       );
 
       callbacks.onResponse(cleaned, images, {
@@ -248,9 +248,7 @@ export class VibeCheckCore {
 
   resetSession() {
     clearSessionId(WORK_DIR);
-    // Force new session on next execute
-    (this.claude as any).currentSessionIdOverride = undefined;
-    (this.claude as any).sessionStarted = false;
+    this.claude.reset();
   }
 
   // Built-in commands

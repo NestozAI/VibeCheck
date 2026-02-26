@@ -269,6 +269,14 @@ export class ClaudeSession {
   }
 
   /**
+   * Reset session state so the next execute() starts a fresh conversation.
+   */
+  reset(): void {
+    this.sessionId = null;
+    this.sessionStarted = false;
+  }
+
+  /**
    * Interrupt the currently running query.
    */
   async interrupt(): Promise<boolean> {
