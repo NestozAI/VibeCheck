@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VibeCheck Demo</title>
+    <style>
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        :root {
+            --bg-primary: #1a1d21;
+            --bg-secondary: #222529;
+            --bg-tertiary: #2c2d31;
+            --bg-hover: #35373b;
+            --border: #3f4144;
+            --text-primary: #d1d2d3;
+            --text-secondary: #9a9c9e;
+            --text-white: #ffffff;
+            --accent: #667eea;
+            --accent-hover: #5a6fd6;
+            --accent-bg: rgba(102, 126, 234, 0.15);
+            --success: #2eb67d;
+            --danger: #e01e5a;
+            --warning: #ecb22e;
+            --code-bg: #1e1e1e;
+            --user-bg: #3a3d8a;
+            --radius: 8px;
+            --radius-lg: 12px;
+        }
+
+        html,
+        body {
+            height: 100%;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+        }
+
+        #app {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            max-width: 860px;
+            margin: 0 auto;
+        }
+
+        header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 20px;
+            border-bottom: 1px solid var(--border);
+            background: var(--bg-secondary);
+            flex-shrink: 0;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 18px;
+            font-weight: 700;
+            color: var(--text-white);
+        }
+
+        .logo-icon {
+            width: 28px;
+            height: 28px;
+            background: linear-gradient(135deg, var(--accent), #764ba2);
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            color: white;
+        }
+
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--success);
+        }
+
+        .badge {
+            background: var(--accent-bg);
+            color: var(--accent);
+            border: 1px solid rgba(102, 126, 234, 0.3);
+            padding: 3px 10px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        #tool-status {
+            padding: 6px 20px;
+            font-size: 13px;
+            color: var(--accent);
+            background: var(--accent-bg);
+            border-bottom: 1px solid var(--border);
+            display: none;
+            flex-shrink: 0;
+            align-items: center;
+            gap: 8px;
+        }
+
+        #tool-status.visible {
+            display: flex;
+        }
+
+        #tool-detail {
+            color: var(--text-secondary);
+            font-size: 12px;
+            margin-left: auto;
+        }
+
+        .spinner {
+            width: 14px;
+            height: 14px;
+            border: 2px solid var(--accent);
+            border-top-color: transparent;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            flex-shrink: 0;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        #messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .message {
+            display: flex;
+            flex-direction: column;
+            max-width: 85%;
+            animation: fadeIn 0.3s ease;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(8px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .message.user {
+            align-self: flex-end;
+        }
+
+        .message.assistant {
+            align-self: flex-start;
+        }
+
+        .message-bubble {
+            padding: 10px 14px;
+            border-radius: var(--radius-lg);
+            line-height: 1.6;
+            font-size: 14px;
+            word-wrap: break-word;
+        }
+
+        .message.user .message-bubble {
+            background: var(--user-bg);
+            color: var(--text-white);
+            border-bottom-right-radius: 4px;
+        }
+
+        .message.assistant .message-bubble {
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+            border-bottom-left-radius: 4px;
+        }
+
+        .message-meta {
+            display: flex;
+            gap: 12px;
+            margin-top: 6px;
+            font-size: 11px;
+            color: var(--text-secondary);
+            padding: 0 4px;
+        }
+
+        .message-bubble code {
+            background: var(--code-bg);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: "SF Mono", "Fira Code", monospace;
+            font-size: 13px;
+        }
+
+        .code-block {
+            margin: 8px 0;
+            background: var(--code-bg);
+            border-radius: var(--radius);
+            overflow: hidden;
+        }
+
+        .code-block-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 6px 12px;
+            background: rgba(255, 255, 255, 0.05);
+            font-size: 12px;
+            color: var(--text-secondary);
+        }
+
+        .code-block pre {
+            margin: 0;
+            padding: 12px;
+            font-family: "SF Mono", "Fira Code", monospace;
+            font-size: 13px;
+            line-height: 1.5;
+            color: #d4d4d4;
+            white-space: pre-wrap;
+        }
+
+        .thinking {
+            display: flex;
+            gap: 4px;
+            padding: 16px 14px;
+        }
+
+        .thinking-dot {
+            width: 8px;
+            height: 8px;
+            background: var(--text-secondary);
+            border-radius: 50%;
+            animation: bounce 1.4s ease-in-out infinite;
+        }
+
+        .thinking-dot:nth-child(2) {
+            animation-delay: 0.2s;
+        }
+
+        .thinking-dot:nth-child(3) {
+            animation-delay: 0.4s;
+        }
+
+        @keyframes bounce {
+
+            0%,
+            80%,
+            100% {
+                transform: translateY(0);
+            }
+
+            40% {
+                transform: translateY(-8px);
+            }
+        }
+
+        footer {
+            padding: 12px 20px;
+            border-top: 1px solid var(--border);
+            background: var(--bg-secondary);
+            flex-shrink: 0;
+        }
+
+        .input-controls {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+
+        .input-controls select {
+            background: var(--bg-primary);
+            border: 1px solid var(--border);
+            color: var(--text-primary);
+            padding: 4px 8px;
+            border-radius: var(--radius);
+            font-size: 12px;
+        }
+
+        .input-wrapper {
+            display: flex;
+            gap: 8px;
+            align-items: flex-end;
+        }
+
+        #input {
+            flex: 1;
+            min-height: 40px;
+            padding: 10px 14px;
+            background: var(--bg-primary);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            color: var(--text-primary);
+            font-size: 14px;
+            font-family: inherit;
+            resize: none;
+            outline: none;
+        }
+
+        #input.focused {
+            border-color: var(--accent);
+        }
+
+        .send-btn {
+            width: 40px;
+            height: 40px;
+            border: none;
+            border-radius: var(--radius);
+            background: var(--accent);
+            color: white;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .send-btn svg {
+            width: 18px;
+            height: 18px;
+        }
+
+        .keyword-highlight {
+            color: #c792ea;
+        }
+
+        .string-highlight {
+            color: #c3e88d;
+        }
+
+        .comment-highlight {
+            color: #546e7a;
+            font-style: italic;
+        }
+
+        .fn-highlight {
+            color: #82aaff;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="app">
+        <header>
+            <div class="logo">
+                <div class="logo-icon">V</div>
+                VibeCheck
+            </div>
+            <div class="header-right">
+                <span class="badge">⚡ Slack</span>
+                <div class="status-dot" title="Connected"></div>
+            </div>
+        </header>
+
+        <div id="tool-status">
+            <div class="spinner"></div>
+            <span id="tool-label">Reading file</span>
+            <span id="tool-detail"></span>
+        </div>
+
+        <main id="messages"></main>
+
+        <footer>
+            <div class="input-controls">
+                <select>
+                    <option>Default Model</option>
+                    <option>claude-sonnet-4</option>
+                </select>
+                <select>
+                    <option>🧑‍💻 Coding Agent</option>
+                    <option>No Skill</option>
+                </select>
+            </div>
+            <div class="input-wrapper">
+                <textarea id="input" rows="1" placeholder="Send a message..."></textarea>
+                <button class="send-btn">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" />
+                    </svg>
+                </button>
+            </div>
+        </footer>
+    </div>
+
+    <script>
+        const messagesEl = document.getElementById('messages');
+        const inputEl = document.getElementById('input');
+        const toolStatus = document.getElementById('tool-status');
+        const toolLabel = document.getElementById('tool-label');
+        const toolDetail = document.getElementById('tool-detail');
+
+        function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+        function addMessage(role, html) {
+            const msg = document.createElement('div');
+            msg.className = `message ${role}`;
+            const bubble = document.createElement('div');
+            bubble.className = 'message-bubble';
+            bubble.innerHTML = html;
+            msg.appendChild(bubble);
+            messagesEl.appendChild(msg);
+            messagesEl.scrollTop = messagesEl.scrollHeight;
+            return msg;
+        }
+
+        function addMessageWithMeta(role, html, meta) {
+            const msg = addMessage(role, html);
+            if (meta) {
+                const metaEl = document.createElement('div');
+                metaEl.className = 'message-meta';
+                metaEl.innerHTML = meta;
+                msg.appendChild(metaEl);
+            }
+            return msg;
+        }
+
+        function showThinking() {
+            const msg = document.createElement('div');
+            msg.className = 'message assistant';
+            msg.id = 'thinking';
+            const bubble = document.createElement('div');
+            bubble.className = 'message-bubble thinking';
+            bubble.innerHTML = '<div class="thinking-dot"></div><div class="thinking-dot"></div><div class="thinking-dot"></div>';
+            msg.appendChild(bubble);
+            messagesEl.appendChild(msg);
+            messagesEl.scrollTop = messagesEl.scrollHeight;
+        }
+
+        function hideThinking() {
+            const el = document.getElementById('thinking');
+            if (el) el.remove();
+        }
+
+        function showTool(label, detail = '') {
+            toolLabel.textContent = label;
+            toolDetail.textContent = detail;
+            toolStatus.classList.add('visible');
+        }
+
+        function hideTool() {
+            toolStatus.classList.remove('visible');
+        }
+
+        async function typeIntoInput(text) {
+            inputEl.classList.add('focused');
+            inputEl.value = '';
+            for (const ch of text) {
+                inputEl.value += ch;
+                await sleep(38);
+            }
+            await sleep(400);
+        }
+
+        async function runDemo() {
+            await sleep(800);
+
+            // Scene 1: User types a message
+            await typeIntoInput('Fix the login bug and write tests for it');
+            await sleep(500);
+            inputEl.classList.remove('focused');
+
+            // User message appears
+            addMessage('user', 'Fix the login bug and write tests for it');
+            inputEl.value = '';
+
+            await sleep(300);
+            showThinking();
+            await sleep(900);
+
+            // Tool: Reading file
+            hideThinking();
+            showTool('Reading file', 'src/auth/login.ts');
+            await sleep(1200);
+
+            showTool('Running command', 'grep -n "login" src/auth/*.ts');
+            await sleep(900);
+
+            showTool('Editing file', 'src/auth/login.ts');
+            await sleep(1100);
+
+            showTool('Writing file', 'src/auth/login.test.ts');
+            await sleep(1000);
+
+            showTool('Running command', 'npm test');
+            await sleep(1300);
+
+            hideTool();
+
+            // Claude response
+            const responseHtml = `
+Fixed the login bug in <code>src/auth/login.ts</code> and wrote full test coverage.<br><br>
+<strong>Root cause:</strong> session token was not being refreshed on re-login.<br><br>
+<div class="code-block">
+  <div class="code-block-header"><span>typescript</span></div>
+  <pre><span class="comment-highlight">// login.ts — before</span>
+<span class="keyword-highlight">if</span> (!session) {
+  session = <span class="fn-highlight">createSession</span>(user);
+}
+
+<span class="comment-highlight">// login.ts — after (fixed)</span>
+session = <span class="fn-highlight">createSession</span>(user); <span class="comment-highlight">// always refresh</span></pre>
+</div>
+<strong>Tests added:</strong> 6 test cases — all passing ✅`;
+
+            addMessageWithMeta('assistant', responseHtml,
+                '<span>$0.0031</span><span style="opacity:0.3">|</span><span>4 turns</span><span style="opacity:0.3">|</span><span>2.1k in / 0.4k out</span>');
+
+            await sleep(2200);
+
+            // Scene 2: Slack command
+            await typeIntoInput('스케줄: 매일 밤 11시에 코드 품질 리포트 생성');
+            await sleep(500);
+            inputEl.classList.remove('focused');
+
+            addMessage('user', '스케줄: 매일 밤 11시에 코드 품질 리포트 생성');
+            inputEl.value = '';
+
+            await sleep(400);
+            showThinking();
+            await sleep(900);
+            hideThinking();
+
+            addMessageWithMeta('assistant',
+                '✅ 스케줄이 등록되었습니다.<br><br>매일 <code>23:00</code>에 코드 품질 리포트를 생성하고 Slack으로 전송합니다.<br><code>0 23 * * *</code> — 🧑‍💻 Coding Agent',
+                '<span>$0.0008</span><span style="opacity:0.3">|</span><span>1 turn</span>');
+
+            await sleep(2000);
+
+            // Scene 3: from phone / Slack feels
+            addMessage('user', 'Deploy to production when all tests pass');
+            await sleep(400);
+            showThinking();
+            await sleep(800);
+            hideThinking();
+            showTool('Running command', 'npm run test:ci');
+            await sleep(1000);
+            showTool('Running command', 'git push origin main');
+            await sleep(900);
+            showTool('Running command', 'kubectl rollout status deployment/app');
+            await sleep(1100);
+            hideTool();
+
+            addMessageWithMeta('assistant',
+                `All <strong>42 tests passed</strong> ✅<br><br>Deployed to production successfully.<br><code>v2.4.1</code> is live at <code>api.yourapp.com</code>`,
+                '<span>$0.0047</span><span style="opacity:0.3">|</span><span>6 turns</span><span style="opacity:0.3">|</span><span>3.8k in / 0.6k out</span>');
+
+            await sleep(3000);
+
+            // Restart
+            messagesEl.innerHTML = '';
+            runDemo();
+        }
+
+        runDemo();
+    </script>
+</body>
+
+</html>
