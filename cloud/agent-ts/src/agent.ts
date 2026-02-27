@@ -500,7 +500,12 @@ export class VibeAgent {
 
   private startPingLoop(): void {
     this.pingInterval = setInterval(() => {
+      // Application-level ping (JSON)
       this.send({ type: "ping" });
+      // WebSocket protocol-level ping (keeps proxy/load balancer alive)
+      if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+        this.ws.ping();
+      }
     }, PING_INTERVAL_MS);
   }
 

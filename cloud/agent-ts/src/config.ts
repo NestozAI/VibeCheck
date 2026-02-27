@@ -3,7 +3,7 @@ import os from "node:os";
 
 export const DEFAULT_SERVER = "wss://vibecheck.sotaaz.com/ws/agent";
 export const SESSION_DIR = path.join(os.homedir(), ".vibecheck");
-export const PING_INTERVAL_MS = 15_000;
+export const PING_INTERVAL_MS = 10_000;
 export const RECONNECT_DELAY_MS = 5_000;
 export const COMMAND_TIMEOUT_MS = 300_000; // 5 minutes
 export const IMAGE_SCAN_TIMEOUT_MS = 2_000;
