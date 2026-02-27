@@ -1,0 +1,623 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=390, initial-scale=1.0">
+    <title>VibeCheck Mobile Demo</title>
+    <style>
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        :root {
+            --bg: #1a1d21;
+            --bg2: #222529;
+            --bg3: #2c2d31;
+            --border: #3a3d40;
+            --text: #d1d2d3;
+            --muted: #9a9c9e;
+            --white: #ffffff;
+            --accent: #667eea;
+            --accent-bg: rgba(102, 126, 234, 0.15);
+            --success: #2eb67d;
+            --user: #3a3d8a;
+            --code: #161b22;
+        }
+
+        html,
+        body {
+            width: 390px;
+            height: 844px;
+            overflow: hidden;
+            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            font-size: 15px;
+        }
+
+        #app {
+            display: flex;
+            flex-direction: column;
+            width: 390px;
+            height: 844px;
+        }
+
+        /* Status bar */
+        .statusbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 20px 6px;
+            background: var(--bg2);
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--white);
+            flex-shrink: 0;
+        }
+
+        .statusbar-right {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 12px;
+        }
+
+        .battery {
+            width: 22px;
+            height: 11px;
+            border: 1.5px solid var(--white);
+            border-radius: 2.5px;
+            position: relative;
+            display: flex;
+            align-items: center;
+            padding: 2px;
+        }
+
+        .battery::after {
+            content: '';
+            position: absolute;
+            right: -5px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 3px;
+            height: 5px;
+            background: var(--white);
+            border-radius: 0 1px 1px 0;
+        }
+
+        .battery-fill {
+            height: 100%;
+            width: 75%;
+            background: var(--white);
+            border-radius: 1px;
+        }
+
+        /* Header */
+        header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 10px 16px;
+            background: var(--bg2);
+            border-bottom: 1px solid var(--border);
+            flex-shrink: 0;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 9px;
+            font-weight: 700;
+            font-size: 17px;
+            color: var(--white);
+        }
+
+        .logo-icon {
+            width: 30px;
+            height: 30px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 17px;
+            font-weight: 800;
+            color: white;
+        }
+
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--success);
+            box-shadow: 0 0 5px rgba(46, 182, 125, 0.7);
+        }
+
+        .pill {
+            background: var(--accent-bg);
+            color: var(--accent);
+            border: 1px solid rgba(102, 126, 234, 0.3);
+            padding: 3px 9px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+
+        /* Tool bar */
+        #tool-bar {
+            padding: 6px 16px;
+            background: var(--accent-bg);
+            border-bottom: 1px solid var(--border);
+            font-size: 12px;
+            color: var(--accent);
+            display: none;
+            align-items: center;
+            gap: 8px;
+            flex-shrink: 0;
+        }
+
+        #tool-bar.on {
+            display: flex;
+        }
+
+        .spinner {
+            width: 12px;
+            height: 12px;
+            border: 2px solid var(--accent);
+            border-top-color: transparent;
+            border-radius: 50%;
+            animation: spin .7s linear infinite;
+            flex-shrink: 0;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        #tool-detail {
+            color: var(--muted);
+            font-size: 11px;
+            margin-left: auto;
+            font-family: "SF Mono", Menlo, monospace;
+        }
+
+        /* Messages */
+        #msgs {
+            flex: 1;
+            overflow: hidden;
+            padding: 14px 14px 0;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .msg {
+            display: flex;
+            flex-direction: column;
+            max-width: 86%;
+            animation: fadeUp .25s ease;
+        }
+
+        @keyframes fadeUp {
+            from {
+                opacity: 0;
+                transform: translateY(8px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .msg.user {
+            align-self: flex-end;
+        }
+
+        .msg.bot {
+            align-self: flex-start;
+        }
+
+        .bubble {
+            padding: 10px 13px;
+            border-radius: 16px;
+            line-height: 1.55;
+            font-size: 14px;
+            word-wrap: break-word;
+        }
+
+        .msg.user .bubble {
+            background: var(--user);
+            color: var(--white);
+            border-bottom-right-radius: 4px;
+        }
+
+        .msg.bot .bubble {
+            background: var(--bg3);
+            color: var(--text);
+            border-bottom-left-radius: 4px;
+        }
+
+        .meta {
+            font-size: 10px;
+            color: var(--muted);
+            margin-top: 4px;
+            padding: 0 3px;
+            display: flex;
+            gap: 8px;
+        }
+
+        .bubble code {
+            background: var(--code);
+            padding: 1px 5px;
+            border-radius: 3px;
+            font-family: "SF Mono", Menlo, monospace;
+            font-size: 12.5px;
+            color: #c792ea;
+        }
+
+        .codeblock {
+            margin: 8px 0 3px;
+            background: var(--code);
+            border-radius: 8px;
+            overflow: hidden;
+            border: 1px solid #2d333b;
+        }
+
+        .codeblock-title {
+            padding: 5px 11px;
+            font-size: 11px;
+            color: var(--muted);
+            background: rgba(255, 255, 255, 0.04);
+            border-bottom: 1px solid #2d333b;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .codeblock pre {
+            padding: 10px 12px;
+            font-family: "SF Mono", Menlo, monospace;
+            font-size: 12px;
+            line-height: 1.5;
+            color: #adbac7;
+            white-space: pre-wrap;
+            margin: 0;
+        }
+
+        .kw {
+            color: #f47067;
+        }
+
+        .fn {
+            color: #dcbdfb;
+        }
+
+        .str {
+            color: #96d0ff;
+        }
+
+        .cm {
+            color: #545d68;
+            font-style: italic;
+        }
+
+        .thinking {
+            display: flex;
+            gap: 4px;
+            padding: 12px 13px;
+        }
+
+        .dot2 {
+            width: 7px;
+            height: 7px;
+            background: var(--muted);
+            border-radius: 50%;
+            animation: bounce 1.3s ease-in-out infinite;
+        }
+
+        .dot2:nth-child(2) {
+            animation-delay: .2s;
+        }
+
+        .dot2:nth-child(3) {
+            animation-delay: .4s;
+        }
+
+        @keyframes bounce {
+
+            0%,
+            80%,
+            100% {
+                transform: translateY(0);
+            }
+
+            40% {
+                transform: translateY(-7px);
+            }
+        }
+
+        /* Footer */
+        footer {
+            padding: 10px 14px 22px;
+            border-top: 1px solid var(--border);
+            background: var(--bg2);
+            flex-shrink: 0;
+        }
+
+        .skill-row {
+            display: flex;
+            gap: 6px;
+            margin-bottom: 8px;
+        }
+
+        .skill-row select {
+            flex: 1;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            color: var(--text);
+            padding: 5px 8px;
+            border-radius: 8px;
+            font-size: 12px;
+        }
+
+        .input-row {
+            display: flex;
+            gap: 8px;
+            align-items: flex-end;
+        }
+
+        #inp {
+            flex: 1;
+            min-height: 40px;
+            padding: 10px 13px;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            color: var(--text);
+            font-size: 14px;
+            font-family: inherit;
+            resize: none;
+            outline: none;
+            transition: border-color .15s;
+        }
+
+        #inp.on {
+            border-color: var(--accent);
+        }
+
+        .send {
+            width: 40px;
+            height: 40px;
+            border: none;
+            border-radius: 50%;
+            background: var(--accent);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .send svg {
+            width: 18px;
+            height: 18px;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="app">
+        <div class="statusbar">
+            <span>9:41</span>
+            <div class="statusbar-right">
+                <svg width="16" height="12" viewBox="0 0 16 12" fill="white">
+                    <rect x="0" y="4" width="3" height="8" rx="1" />
+                    <rect x="4.5" y="2.5" width="3" height="9.5" rx="1" />
+                    <rect x="9" y="1" width="3" height="11" rx="1" />
+                    <rect x="13.5" y="0" width="2.5" height="12" rx="1" />
+                </svg>
+                <div class="battery">
+                    <div class="battery-fill"></div>
+                </div>
+            </div>
+        </div>
+
+        <header>
+            <div class="logo">
+                <div class="logo-icon">V</div>
+                VibeCheck
+            </div>
+            <div class="header-right">
+                <span class="pill">⚡ Slack</span>
+                <div class="dot"></div>
+            </div>
+        </header>
+
+        <div id="tool-bar">
+            <div class="spinner"></div>
+            <span id="tlabel">Running</span>
+            <span id="tdetail"></span>
+        </div>
+
+        <main id="msgs"></main>
+
+        <footer>
+            <div class="skill-row">
+                <select>
+                    <option>🧑‍💻 Coding Agent</option>
+                    <option>No Skill</option>
+                </select>
+                <select>
+                    <option>claude-sonnet-4</option>
+                </select>
+            </div>
+            <div class="input-row">
+                <textarea id="inp" rows="1" placeholder="Message Claude Code..."></textarea>
+                <button class="send">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+                        <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z" />
+                    </svg>
+                </button>
+            </div>
+        </footer>
+    </div>
+
+    <script>
+        const msgsEl = document.getElementById('msgs');
+        const inpEl = document.getElementById('inp');
+        const bar = document.getElementById('tool-bar');
+        const tlabel = document.getElementById('tlabel');
+        const tdetail = document.getElementById('tdetail');
+
+        const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+        function addMsg(role, html, meta) {
+            const d = document.createElement('div');
+            d.className = `msg ${role}`;
+            const b = document.createElement('div');
+            b.className = 'bubble';
+            b.innerHTML = html;
+            d.appendChild(b);
+            if (meta) {
+                const m = document.createElement('div');
+                m.className = 'meta';
+                m.innerHTML = meta;
+                d.appendChild(m);
+            }
+            msgsEl.appendChild(d);
+            msgsEl.scrollTop = msgsEl.scrollHeight;
+            return d;
+        }
+
+        function showThink() {
+            const d = document.createElement('div');
+            d.className = 'msg bot'; d.id = 'think';
+            const b = document.createElement('div');
+            b.className = 'bubble thinking';
+            b.innerHTML = '<div class="dot2"></div><div class="dot2"></div><div class="dot2"></div>';
+            d.appendChild(b);
+            msgsEl.appendChild(d);
+            msgsEl.scrollTop = msgsEl.scrollHeight;
+        }
+        function hideThink() { const e = document.getElementById('think'); if (e) e.remove(); }
+
+        function showTool(label, detail = '') {
+            tlabel.textContent = label;
+            tdetail.textContent = detail;
+            bar.classList.add('on');
+        }
+        function hideTool() { bar.classList.remove('on'); }
+
+        async function type(text) {
+            inpEl.classList.add('on');
+            inpEl.value = '';
+            for (const c of text) { inpEl.value += c; await sleep(36); }
+            await sleep(320);
+        }
+
+        async function run() {
+            await sleep(700);
+
+            // ── Scene 1: Bug fix ─────────────────────────────────────
+            await type('Fix the auth bug and write unit tests');
+            await sleep(350);
+            inpEl.classList.remove('on');
+            addMsg('user', 'Fix the auth bug and write unit tests');
+            inpEl.value = '';
+
+            await sleep(280);
+            showThink();
+            await sleep(650);
+            hideThink();
+
+            showTool('Reading file', 'src/auth/session.ts');
+            await sleep(900);
+            showTool('Editing file', 'src/auth/session.ts');
+            await sleep(850);
+            showTool('Running command', 'npm test');
+            await sleep(1000);
+            hideTool();
+
+            addMsg('bot', `
+    Found the bug in <code>session.ts</code>. Token was never cleared on logout.<br><br>
+    <div class="codeblock">
+      <div class="codeblock-title"><span>typescript</span><span>session.ts</span></div>
+      <pre><span class="cm">// Before</span>
+<span class="kw">await</span> db.<span class="fn">update</span>({ active: <span class="kw">false</span> });
+
+<span class="cm">// After — fixed ✓</span>
+<span class="kw">await</span> db.<span class="fn">deleteAll</span>({ userId });
+cache.<span class="fn">del</span>(<span class="str">\`session:\${userId}\`</span>);</pre>
+    </div>
+    <strong>8 tests written — all passing ✅</strong>`,
+                '<span>$0.0038</span><span>·</span><span>5 turns</span>');
+
+            await sleep(2200);
+
+            // ── Scene 2: Scheduler ───────────────────────────────────
+            await type('Schedule daily dependency audit at 9 AM');
+            await sleep(350);
+            inpEl.classList.remove('on');
+            addMsg('user', 'Schedule daily dependency audit at 9 AM');
+            inpEl.value = '';
+
+            await sleep(280);
+            showThink();
+            await sleep(750);
+            hideThink();
+
+            addMsg('bot',
+                '✅ <strong>Scheduled!</strong><br><br>' +
+                'Every morning at <code>09:00</code> Claude will audit dependencies and send results to Slack.<br><br>' +
+                '<code>0 9 * * *</code> · 🧑‍💻 Coding Agent',
+                '<span>$0.0009</span><span>·</span><span>1 turn</span>');
+
+            await sleep(2100);
+
+            // ── Scene 3: Deploy ──────────────────────────────────────
+            await type('Run tests, deploy to prod if green');
+            await sleep(350);
+            inpEl.classList.remove('on');
+            addMsg('user', 'Run tests, deploy to prod if green');
+            inpEl.value = '';
+
+            await sleep(280);
+            showThink();
+            await sleep(650);
+            hideThink();
+
+            showTool('Running command', 'npm run test:ci');
+            await sleep(900);
+            showTool('Running command', 'kubectl apply -f deploy/');
+            await sleep(1000);
+            showTool('Running command', 'kubectl rollout status');
+            await sleep(900);
+            hideTool();
+
+            addMsg('bot',
+                '🚀 <strong>All 64 tests passed.</strong> Deployed!<br><br>' +
+                '<code>v2.5.0</code> is live at <code>api.yourapp.com</code>',
+                '<span>$0.0047</span><span>·</span><span>7 turns</span>');
+
+            await sleep(2800);
+            msgsEl.innerHTML = '';
+            run();
+        }
+        run();
+    </script>
+</body>
+
+</html>

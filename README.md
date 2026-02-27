@@ -10,7 +10,16 @@
 
 **VibeCheck** lets you control Claude Code CLI running on your server via web browser. Write and edit code from anywhere — home, cafe, or on the go.
 
-![VibeCheck Demo](./assets/demo.gif)
+<table>
+  <tr>
+    <td align="center"><b>Desktop</b></td>
+    <td align="center"><b>Mobile</b></td>
+  </tr>
+  <tr>
+    <td><img src="./assets/demo.gif" alt="VibeCheck Desktop Demo" width="600"/></td>
+    <td><img src="./assets/demo-mobile.gif" alt="VibeCheck Mobile Demo" width="220"/></td>
+  </tr>
+</table>
 
 ---
 
