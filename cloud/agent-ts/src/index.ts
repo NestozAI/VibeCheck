@@ -67,6 +67,16 @@ process.on("SIGTERM", () => {
   process.exit(0);
 });
 
+// Prevent silent crashes from unhandled promise rejections
+process.on("unhandledRejection", (reason) => {
+  console.error("[agent] Unhandled rejection:", reason);
+});
+
+process.on("uncaughtException", (error) => {
+  console.error("[agent] Uncaught exception:", error);
+  // Don't exit — let the reconnect loop handle it
+});
+
 main().catch((e) => {
   console.error("[agent] Fatal error:", e);
   process.exit(1);

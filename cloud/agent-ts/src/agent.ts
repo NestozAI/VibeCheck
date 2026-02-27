@@ -50,6 +50,7 @@ export class VibeAgent {
   /** Scheduled tasks that arrived while a user query was in progress */
   private pendingScheduledTasks: ScheduledTask[] = [];
   private pingInterval: ReturnType<typeof setInterval> | null = null;
+  private pongReceived = true;
   private lastProjectPath: string | null = null;
 
   constructor(
@@ -166,6 +167,11 @@ export class VibeAgent {
         }
       });
 
+      // WebSocket protocol-level pong (response to ws.ping())
+      this.ws.on("pong", () => {
+        this.pongReceived = true;
+      });
+
       this.ws.on("close", (code, reason) => {
         console.log(
           `[agent] Connection closed: ${code} ${reason.toString()}`,
@@ -214,6 +220,7 @@ export class VibeAgent {
         break;
 
       case "pong":
+        this.pongReceived = true;
         break;
 
       case "session_info":
@@ -499,7 +506,15 @@ export class VibeAgent {
   }
 
   private startPingLoop(): void {
+    this.pongReceived = true;
     this.pingInterval = setInterval(() => {
+      // Check if previous pong was received — if not, connection is dead
+      if (!this.pongReceived) {
+        console.warn("[agent] No pong received — connection appears dead, forcing reconnect");
+        this.ws?.terminate();
+        return;
+      }
+      this.pongReceived = false;
       // Application-level ping (JSON)
       this.send({ type: "ping" });
       // WebSocket protocol-level ping (keeps proxy/load balancer alive)
