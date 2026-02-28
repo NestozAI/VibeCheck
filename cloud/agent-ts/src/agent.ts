@@ -41,7 +41,7 @@ import type {
 } from "./protocol.js";
 import { getSkill, getAllSkills } from "./skills.js";
 import { TaskScheduler, type ScheduledTask } from "./scheduler.js";
-import { scanClaudeCodeSessions } from "./sessions-scanner.js";
+import { scanClaudeCodeSessions, readSessionHistory } from "./sessions-scanner.js";
 
 export class VibeAgent {
   private ws: WebSocket | null = null;
@@ -507,9 +507,16 @@ export class VibeAgent {
       work_dir: this.workDir,
       session_id: sessionId,
     });
+
+    // Read and send conversation history from JSONL
+    const history = readSessionHistory(this.workDir, sessionId);
+    console.log(`[agent] Session history: ${history.length} messages`);
+
+    // Send history for the web UI to render
     this.send({
-      type: "response",
-      result: `Session resumed: ${sessionId.slice(0, 8)}... — 이전 대화 컨텍스트를 이어받습니다.`,
+      type: "session_history",
+      session_id: sessionId,
+      history,
     });
   }
 

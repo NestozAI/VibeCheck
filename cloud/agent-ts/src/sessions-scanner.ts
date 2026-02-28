@@ -134,3 +134,74 @@ export function scanClaudeCodeSessions(workDir: string): ClaudeCodeSession[] {
 
   return sessions;
 }
+
+export interface SessionMessage {
+  role: "user" | "assistant";
+  content: string;
+}
+
+/**
+ * Read conversation history from a Claude Code JSONL session file.
+ * Extracts user/assistant text messages, skipping tool calls and system messages.
+ * Returns the last `limit` messages to keep payload small.
+ */
+export function readSessionHistory(
+  workDir: string,
+  sessionId: string,
+  limit = 30,
+): SessionMessage[] {
+  const encoded = encodeProjectPath(workDir);
+  const filePath = path.join(
+    os.homedir(),
+    ".claude",
+    "projects",
+    encoded,
+    `${sessionId}.jsonl`,
+  );
+
+  if (!fs.existsSync(filePath)) return [];
+
+  const messages: SessionMessage[] = [];
+  try {
+    const content = fs.readFileSync(filePath, "utf-8");
+    const lines = content.split("\n").filter(Boolean);
+
+    for (const line of lines) {
+      try {
+        const obj = JSON.parse(line);
+        if (obj.type !== "user" && obj.type !== "assistant") continue;
+
+        const role = obj.type as "user" | "assistant";
+        const msgContent = obj.message?.content;
+        if (!msgContent) continue;
+
+        let text = "";
+        if (Array.isArray(msgContent)) {
+          const textParts = msgContent
+            .filter((c: Record<string, unknown>) => c.type === "text")
+            .map((c: Record<string, unknown>) => c.text as string);
+          text = textParts.join("\n");
+        } else if (typeof msgContent === "string") {
+          text = msgContent;
+        }
+
+        // Skip empty messages (tool-only responses)
+        if (!text.trim()) continue;
+
+        // Truncate very long messages
+        if (text.length > 2000) {
+          text = text.slice(0, 2000) + "\n\n... (truncated)";
+        }
+
+        messages.push({ role, content: text });
+      } catch {
+        // Skip unparseable lines
+      }
+    }
+  } catch {
+    // File read failed
+  }
+
+  // Return last N messages
+  return messages.slice(-limit);
+}

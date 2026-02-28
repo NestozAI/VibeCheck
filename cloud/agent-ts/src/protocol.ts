@@ -96,6 +96,12 @@ export interface ClaudeSessionsMessage {
   sessions: ClaudeCodeSessionInfo[];
 }
 
+export interface SessionHistoryMessage {
+  type: "session_history";
+  session_id: string;
+  history: { role: "user" | "assistant"; content: string }[];
+}
+
 export type AgentToServerMessage =
   | PingMessage
   | PongMessage
@@ -108,7 +114,8 @@ export type AgentToServerMessage =
   | SkillListResponseMessage
   | ScheduleListResponseMessage
   | ScheduleAddResponseMessage
-  | ClaudeSessionsMessage;
+  | ClaudeSessionsMessage
+  | SessionHistoryMessage;
 
 // === Server -> Agent messages ===
 
