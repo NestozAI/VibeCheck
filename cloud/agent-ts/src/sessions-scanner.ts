@@ -15,6 +15,8 @@ export interface ClaudeCodeSession {
   modified: string;  // ISO timestamp
   gitBranch?: string;
   projectPath: string;
+  /** Whether the session has displayable conversation content */
+  hasConversation: boolean;
 }
 
 /**
@@ -53,6 +55,8 @@ export function scanClaudeCodeSessions(workDir: string): ClaudeCodeSession[] {
             modified: (e.modified as string) || "",
             gitBranch: e.gitBranch as string | undefined,
             projectPath: (e.projectPath as string) || workDir,
+            // Heuristic: sessions with a firstPrompt and messageCount >= 2 likely have conversation
+            hasConversation: !!((e.firstPrompt as string)?.trim()) && ((e.messageCount as number) || 0) >= 2,
           }))
           .sort(
             (a: ClaudeCodeSession, b: ClaudeCodeSession) =>
@@ -126,6 +130,7 @@ export function scanClaudeCodeSessions(workDir: string): ClaudeCodeSession[] {
         modified: stats.mtime.toISOString(),
         gitBranch,
         projectPath: workDir,
+        hasConversation: !!firstPrompt.trim(),
       });
     }
   } catch {

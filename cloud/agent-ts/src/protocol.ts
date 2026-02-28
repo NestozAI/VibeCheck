@@ -89,6 +89,8 @@ export interface ClaudeCodeSessionInfo {
   modified: string;
   gitBranch?: string;
   projectPath: string;
+  /** Whether the session has displayable conversation content */
+  hasConversation?: boolean;
 }
 
 export interface ClaudeSessionsMessage {
