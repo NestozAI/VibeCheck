@@ -63,6 +63,18 @@ async function main(): Promise<void> {
         `[agent] Connection failed: ${error instanceof Error ? error.message : error}`,
       );
     }
+    // Check for updates on each reconnect
+    const reconnectUpdated = await checkForUpdates();
+    if (reconnectUpdated) {
+      console.log("[agent] Re-launching with updated version...");
+      const { spawn } = await import("node:child_process");
+      const child = spawn(process.argv[0], process.argv.slice(1), {
+        stdio: "inherit",
+        env: process.env,
+      });
+      child.on("exit", (code) => process.exit(code ?? 0));
+      return;
+    }
     console.log(
       `[agent] Reconnecting in ${RECONNECT_DELAY_MS / 1000}s...`,
     );
