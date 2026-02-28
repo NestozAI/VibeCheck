@@ -1,5 +1,6 @@
 import WebSocket from "ws";
 import path from "node:path";
+import os from "node:os";
 import type { SDKSystemMessage } from "@anthropic-ai/claude-agent-sdk";
 import { ClaudeSession, AbortError } from "./claude.js";
 import type { ExecuteResult } from "./claude.js";
@@ -481,6 +482,7 @@ export class VibeAgent {
       type: "session_sync",
       work_dir: this.workDir,
       session_id: sessionId ?? null,
+      hostname: os.hostname(),
     });
 
     // Wait for session_info from server (with timeout)

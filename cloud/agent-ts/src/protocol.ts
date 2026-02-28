@@ -44,6 +44,7 @@ export interface SessionSyncMessage {
   type: "session_sync";
   work_dir: string;
   session_id: string | null;
+  hostname?: string;
 }
 
 export interface SessionUpdateMessage {
