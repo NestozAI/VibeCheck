@@ -178,14 +178,17 @@ export function scanAllProjects(): ProjectSummary[] {
 
         if (files.length === 0) continue; // Skip projects with no sessions
 
-        // Find most recent modification time
+        // Get latest mtime cheaply: check sessions-index.json or directory mtime
+        // (avoids stat-ing every JSONL file — can be 1000+ files)
         let latestMtime = 0;
-        for (const f of files) {
-          try {
-            const st = fs.statSync(path.join(dirPath, f));
-            if (st.mtimeMs > latestMtime) latestMtime = st.mtimeMs;
-          } catch { /* skip */ }
-        }
+        try {
+          const indexPath = path.join(dirPath, "sessions-index.json");
+          if (fs.existsSync(indexPath)) {
+            latestMtime = fs.statSync(indexPath).mtimeMs;
+          } else {
+            latestMtime = fs.statSync(dirPath).mtimeMs;
+          }
+        } catch { /* fallback: 0 */ }
 
         // Best-effort decode: replace leading dash + internal dashes back to /
         // e.g. "-disk1-projects-blog" → "/disk1/projects/blog"
