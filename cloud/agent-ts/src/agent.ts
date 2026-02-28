@@ -282,6 +282,10 @@ export class VibeAgent {
       case "schedule_toggle":
         this.scheduler.toggleTask(msg.id, msg.enabled);
         break;
+
+      case "resume_session":
+        this.handleResumeSession(msg.session_id);
+        break;
     }
   }
 
@@ -492,6 +496,21 @@ export class VibeAgent {
     // Wait for session_info from server (with timeout)
     // The response is handled in handleSessionInfo
     console.log("[agent] Session sync request sent");
+  }
+
+  private handleResumeSession(sessionId: string): void {
+    console.log(`[agent] Resuming session: ${sessionId.slice(0, 20)}...`);
+    this.claude.currentSessionIdOverride = sessionId;
+    saveSessionId(this.workDir, sessionId);
+    this.send({
+      type: "session_update",
+      work_dir: this.workDir,
+      session_id: sessionId,
+    });
+    this.send({
+      type: "response",
+      result: `Session resumed: ${sessionId.slice(0, 8)}... — 이전 대화 컨텍스트를 이어받습니다.`,
+    });
   }
 
   private sendClaudeCodeSessions(): void {

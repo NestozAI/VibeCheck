@@ -195,6 +195,11 @@ export interface ScheduleListRequestMessage {
   type: "schedule_list";
 }
 
+export interface ResumeSessionMessage {
+  type: "resume_session";
+  session_id: string;
+}
+
 export type ServerToAgentMessage =
   | QueryMessage
   | ApprovalMessage
@@ -208,7 +213,8 @@ export type ServerToAgentMessage =
   | ScheduleAddMessage
   | ScheduleRemoveMessage
   | ScheduleToggleMessage
-  | ScheduleListRequestMessage;
+  | ScheduleListRequestMessage
+  | ResumeSessionMessage;
 
 // === Skill / Schedule response messages (Agent -> Server) ===
 
