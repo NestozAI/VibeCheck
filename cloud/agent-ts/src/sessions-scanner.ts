@@ -19,10 +19,11 @@ export interface ClaudeCodeSession {
 
 /**
  * Encode a filesystem path to Claude Code's project directory name.
- * /disk1/lecture/foo → -disk1-lecture-foo
+ * Claude Code replaces /, _, spaces, and non-ASCII chars with dashes.
+ * /data/projects/amber_demo → -data-projects-amber-demo
  */
 function encodeProjectPath(projectPath: string): string {
-  return projectPath.replace(/\//g, "-");
+  return projectPath.replace(/[/_\s]/g, "-").replace(/[^\x20-\x7E]/g, "-");
 }
 
 /**
