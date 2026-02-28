@@ -140,6 +140,74 @@ export function scanClaudeCodeSessions(workDir: string): ClaudeCodeSession[] {
   return sessions;
 }
 
+/**
+ * Lightweight project summary for the "Browse Projects" discovery UI.
+ * Does NOT expose session contents — only project path + session count.
+ */
+export interface ProjectSummary {
+  /** The decoded project path (best-effort reverse of encoding) */
+  projectPath: string;
+  /** Encoded directory name under ~/.claude/projects/ */
+  dirName: string;
+  /** Number of session JSONL files */
+  sessionCount: number;
+  /** Most recent session modification time (ISO) */
+  lastModified: string;
+}
+
+/**
+ * Scan ALL Claude Code project directories under ~/.claude/projects/.
+ * Returns a lightweight list of projects with session counts.
+ * No session content is read — safe for discovery/browsing.
+ */
+export function scanAllProjects(): ProjectSummary[] {
+  const projectsRoot = path.join(os.homedir(), ".claude", "projects");
+  if (!fs.existsSync(projectsRoot)) return [];
+
+  const projects: ProjectSummary[] = [];
+  try {
+    const dirs = fs.readdirSync(projectsRoot, { withFileTypes: true })
+      .filter(d => d.isDirectory());
+
+    for (const dir of dirs) {
+      const dirPath = path.join(projectsRoot, dir.name);
+      try {
+        // Count JSONL session files
+        const files = fs.readdirSync(dirPath)
+          .filter(f => f.endsWith(".jsonl"));
+
+        if (files.length === 0) continue; // Skip projects with no sessions
+
+        // Find most recent modification time
+        let latestMtime = 0;
+        for (const f of files) {
+          try {
+            const st = fs.statSync(path.join(dirPath, f));
+            if (st.mtimeMs > latestMtime) latestMtime = st.mtimeMs;
+          } catch { /* skip */ }
+        }
+
+        // Best-effort decode: replace leading dash + internal dashes back to /
+        // e.g. "-disk1-projects-blog" → "/disk1/projects/blog"
+        const decoded = dir.name.startsWith("-")
+          ? dir.name.replace(/-/g, "/")
+          : "/" + dir.name.replace(/-/g, "/");
+
+        projects.push({
+          projectPath: decoded,
+          dirName: dir.name,
+          sessionCount: files.length,
+          lastModified: latestMtime ? new Date(latestMtime).toISOString() : "",
+        });
+      } catch { /* skip unreadable dirs */ }
+    }
+  } catch { /* root dir read failed */ }
+
+  return projects.sort((a, b) =>
+    new Date(b.lastModified).getTime() - new Date(a.lastModified).getTime()
+  );
+}
+
 export interface SessionMessage {
   role: "user" | "assistant";
   content: string;

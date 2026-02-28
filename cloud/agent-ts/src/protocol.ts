@@ -104,6 +104,27 @@ export interface SessionHistoryMessage {
   history: { role: "user" | "assistant"; content: string }[];
 }
 
+/** Lightweight project summary for discovery */
+export interface ProjectSummaryInfo {
+  projectPath: string;
+  dirName: string;
+  sessionCount: number;
+  lastModified: string;
+}
+
+/** Agent → Server: list of all discoverable projects */
+export interface ProjectListMessage {
+  type: "project_list";
+  projects: ProjectSummaryInfo[];
+}
+
+/** Agent → Server: sessions for a specific project (after user selects one) */
+export interface ProjectSessionsMessage {
+  type: "project_sessions";
+  projectPath: string;
+  sessions: ClaudeCodeSessionInfo[];
+}
+
 export type AgentToServerMessage =
   | PingMessage
   | PongMessage
@@ -117,7 +138,9 @@ export type AgentToServerMessage =
   | ScheduleListResponseMessage
   | ScheduleAddResponseMessage
   | ClaudeSessionsMessage
-  | SessionHistoryMessage;
+  | SessionHistoryMessage
+  | ProjectListMessage
+  | ProjectSessionsMessage;
 
 // === Server -> Agent messages ===
 
@@ -209,6 +232,17 @@ export interface ResumeSessionMessage {
   session_id: string;
 }
 
+/** Server → Agent: request list of all discoverable projects */
+export interface DiscoverProjectsMessage {
+  type: "discover_projects";
+}
+
+/** Server → Agent: request sessions for a specific project path */
+export interface ScanProjectMessage {
+  type: "scan_project";
+  projectPath: string;
+}
+
 export type ServerToAgentMessage =
   | QueryMessage
   | ApprovalMessage
@@ -223,7 +257,9 @@ export type ServerToAgentMessage =
   | ScheduleRemoveMessage
   | ScheduleToggleMessage
   | ScheduleListRequestMessage
-  | ResumeSessionMessage;
+  | ResumeSessionMessage
+  | DiscoverProjectsMessage
+  | ScanProjectMessage;
 
 // === Skill / Schedule response messages (Agent -> Server) ===
 

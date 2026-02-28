@@ -38,10 +38,12 @@ import type {
   SkillListResponseMessage,
   ScheduleListResponseMessage,
   ScheduleAddResponseMessage,
+  ProjectListMessage,
+  ProjectSessionsMessage,
 } from "./protocol.js";
 import { getSkill, getAllSkills } from "./skills.js";
 import { TaskScheduler, type ScheduledTask } from "./scheduler.js";
-import { scanClaudeCodeSessions, readSessionHistory } from "./sessions-scanner.js";
+import { scanClaudeCodeSessions, scanAllProjects, readSessionHistory } from "./sessions-scanner.js";
 
 export class VibeAgent {
   private ws: WebSocket | null = null;
@@ -286,6 +288,14 @@ export class VibeAgent {
       case "resume_session":
         this.handleResumeSession(msg.session_id);
         break;
+
+      case "discover_projects":
+        this.handleDiscoverProjects();
+        break;
+
+      case "scan_project":
+        this.handleScanProject(msg.projectPath);
+        break;
     }
   }
 
@@ -518,6 +528,32 @@ export class VibeAgent {
       session_id: sessionId,
       history,
     });
+  }
+
+  private handleDiscoverProjects(): void {
+    try {
+      const projects = scanAllProjects();
+      const msg: ProjectListMessage = { type: "project_list", projects };
+      this.send(msg);
+      console.log(`[agent] Sent ${projects.length} discoverable projects`);
+    } catch (e) {
+      console.error("[agent] Failed to discover projects:", e);
+    }
+  }
+
+  private handleScanProject(projectPath: string): void {
+    try {
+      const sessions = scanClaudeCodeSessions(projectPath);
+      const msg: ProjectSessionsMessage = {
+        type: "project_sessions",
+        projectPath,
+        sessions,
+      };
+      this.send(msg);
+      console.log(`[agent] Sent ${sessions.length} sessions for ${projectPath}`);
+    } catch (e) {
+      console.error("[agent] Failed to scan project:", e);
+    }
   }
 
   private sendClaudeCodeSessions(): void {
