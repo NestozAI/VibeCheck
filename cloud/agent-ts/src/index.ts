@@ -4,6 +4,7 @@ import { Command } from "commander";
 import path from "node:path";
 import { VibeAgent } from "./agent.js";
 import { DEFAULT_SERVER, RECONNECT_DELAY_MS } from "./config.js";
+import { checkForUpdates } from "./updater.js";
 
 const program = new Command()
   .name("vibecheck-agent")
@@ -33,6 +34,19 @@ console.log("");
 const agent = new VibeAgent(opts.key, workDir, opts.server, opts.newSession);
 
 async function main(): Promise<void> {
+  // Auto-update on startup
+  const updated = await checkForUpdates();
+  if (updated) {
+    // Re-exec with the updated binary
+    const { spawn } = await import("node:child_process");
+    const child = spawn(process.argv[0], process.argv.slice(1), {
+      stdio: "inherit",
+      env: process.env,
+    });
+    child.on("exit", (code) => process.exit(code ?? 0));
+    return;
+  }
+
   while (true) {
     try {
       await agent.connect();
