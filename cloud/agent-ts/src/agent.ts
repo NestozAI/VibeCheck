@@ -41,6 +41,7 @@ import type {
 } from "./protocol.js";
 import { getSkill, getAllSkills } from "./skills.js";
 import { TaskScheduler, type ScheduledTask } from "./scheduler.js";
+import { scanClaudeCodeSessions } from "./sessions-scanner.js";
 
 export class VibeAgent {
   private ws: WebSocket | null = null;
@@ -155,6 +156,9 @@ export class VibeAgent {
 
         // Sync session with server
         await this.syncSession();
+
+        // Send Claude Code session history
+        this.sendClaudeCodeSessions();
 
         console.log("[agent] Waiting for messages...");
       });
@@ -488,6 +492,16 @@ export class VibeAgent {
     // Wait for session_info from server (with timeout)
     // The response is handled in handleSessionInfo
     console.log("[agent] Session sync request sent");
+  }
+
+  private sendClaudeCodeSessions(): void {
+    try {
+      const sessions = scanClaudeCodeSessions(this.workDir);
+      this.send({ type: "claude_sessions", sessions });
+      console.log(`[agent] Sent ${sessions.length} Claude Code sessions`);
+    } catch (e) {
+      console.error("[agent] Failed to scan Claude Code sessions:", e);
+    }
   }
 
   private handleSessionInfo(msg: { session_id: string | null; source: string }): void {

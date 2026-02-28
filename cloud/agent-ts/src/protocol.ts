@@ -78,6 +78,24 @@ export interface StreamingChunkMessage {
   index: number;   // sequence number within this response
 }
 
+/**
+ * Claude Code local session info — scanned from ~/.claude/projects/
+ */
+export interface ClaudeCodeSessionInfo {
+  sessionId: string;
+  firstPrompt: string;
+  messageCount: number;
+  created: string;
+  modified: string;
+  gitBranch?: string;
+  projectPath: string;
+}
+
+export interface ClaudeSessionsMessage {
+  type: "claude_sessions";
+  sessions: ClaudeCodeSessionInfo[];
+}
+
 export type AgentToServerMessage =
   | PingMessage
   | PongMessage
@@ -89,7 +107,8 @@ export type AgentToServerMessage =
   | StreamingChunkMessage
   | SkillListResponseMessage
   | ScheduleListResponseMessage
-  | ScheduleAddResponseMessage;
+  | ScheduleAddResponseMessage
+  | ClaudeSessionsMessage;
 
 // === Server -> Agent messages ===
 
