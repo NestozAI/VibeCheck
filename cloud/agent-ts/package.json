@@ -1,6 +1,6 @@
 {
   "name": "vibecheck-agent",
-  "version": "1.0.16",
+  "version": "1.0.17",
   "description": "VibeCheck Agent - Remote control Claude Code from anywhere",
   "type": "module",
   "bin": {

@@ -514,27 +514,30 @@ export class VibeAgent {
     const isCrossProject = projectPath && projectPath !== this.workDir;
     console.log(`[agent] Resuming session: ${sessionId.slice(0, 20)}... (project: ${historyPath}, cross: ${!!isCrossProject})`);
 
-    if (!isCrossProject) {
-      // Same project: full resume (set session ID so next query continues this session)
-      this.claude.currentSessionIdOverride = sessionId;
-      saveSessionId(this.workDir, sessionId);
-      this.send({
-        type: "session_update",
-        work_dir: this.workDir,
-        session_id: sessionId,
-      });
+    // Set session ID for resume (both same-project and cross-project)
+    this.claude.currentSessionIdOverride = sessionId;
+
+    if (isCrossProject) {
+      // Switch Claude SDK cwd to the target project
+      this.claude.cwdOverride = projectPath;
+      console.log(`[agent] Switched cwd to: ${projectPath}`);
     }
 
-    // Read and send conversation history from JSONL (using correct project path)
+    saveSessionId(historyPath, sessionId);
+    this.send({
+      type: "session_update",
+      work_dir: historyPath,
+      session_id: sessionId,
+    });
+
+    // Read and send conversation history from JSONL
     const history = readSessionHistory(historyPath, sessionId);
     console.log(`[agent] Session history: ${history.length} messages`);
 
-    // Send history for the web UI to render
     this.send({
       type: "session_history",
       session_id: sessionId,
       history,
-      ...(isCrossProject ? { readOnly: true } : {}),
     });
   }
 

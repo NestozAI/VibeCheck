@@ -70,6 +70,15 @@ export class ClaudeSession {
     this.sessionId = id;
   }
 
+  /** Override cwd for cross-project session resume */
+  set cwdOverride(dir: string | null) {
+    this.workDir = dir || this.workDir;
+  }
+
+  get currentWorkDir(): string {
+    return this.workDir;
+  }
+
   /**
    * Execute a query and return the result with metadata.
    * - Streams text chunks via onStreamingChunk (stream_event)
