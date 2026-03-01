@@ -578,9 +578,15 @@ export class VibeAgent {
     if (msg.session_id && msg.source === "server") {
       // Server has a session, use it if we don't have one
       if (!this.claude.currentSessionId) {
-        this.claude.currentSessionIdOverride = msg.session_id;
-        saveSessionId(this.workDir, msg.session_id);
-        console.log(`[agent] Server session synced: ${msg.session_id.slice(0, 20)}...`);
+        // Verify the session actually belongs to this agent's project
+        const history = readSessionHistory(this.workDir, msg.session_id, 1);
+        if (history.length > 0) {
+          this.claude.currentSessionIdOverride = msg.session_id;
+          saveSessionId(this.workDir, msg.session_id);
+          console.log(`[agent] Server session synced: ${msg.session_id.slice(0, 20)}...`);
+        } else {
+          console.log(`[agent] Server session ${msg.session_id.slice(0, 20)}... not found in ${this.workDir}, ignoring`);
+        }
       }
     }
   }

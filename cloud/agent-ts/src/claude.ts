@@ -244,9 +244,10 @@ export class ClaudeSession {
       if (
         this.sessionId &&
         (errMsg.toLowerCase().includes("session") ||
-          errMsg.toLowerCase().includes("not found"))
+          errMsg.toLowerCase().includes("not found") ||
+          errMsg.includes("exited with code"))
       ) {
-        console.warn("[claude] Invalid session ID. Retrying with new session...");
+        console.warn(`[claude] Session error: ${errMsg}. Retrying with new session...`);
         this.sessionId = null;
         this.sessionStarted = false;
         return this.execute(message, model, skill, systemPrompt, agents);
