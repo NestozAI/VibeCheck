@@ -6,7 +6,7 @@
 [![Korean](https://img.shields.io/badge/Language-한국어-red)](./README_kr.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Agent-blue.svg)](./cloud/agent-ts/)
-[![PyPI](https://img.shields.io/pypi/v/vibecheck-agent?color=green)](https://pypi.org/project/vibecheck-agent/)
+[![npm](https://img.shields.io/npm/v/vibecheck-agent?color=green)](https://www.npmjs.com/package/vibecheck-agent)
 
 **VibeCheck**는 서버에서 실행 중인 Claude Code CLI를 웹 브라우저로 제어할 수 있게 합니다. 집, 카페, 어디서든 코드를 작성하고 수정하세요.
 
@@ -69,7 +69,7 @@ vibecheck-agent --key YOUR_API_KEY --dir /path/to/project
   --server 커스텀 서버 URL (선택 사항)
 ```
 
-> **TypeScript 에이전트** (`cloud/agent-ts/`)가 현재 활발히 관리되는 구현체입니다. Python 에이전트(`vibecheck-agent` on PyPI)는 레거시 버전입니다.
+> 클라우드 에이전트(`cloud/agent-ts/`)는 npm에 [`vibecheck-agent`](https://www.npmjs.com/package/vibecheck-agent)로 배포됩니다.
 
 ---
 
@@ -273,23 +273,26 @@ WORK_DIR=/path/to/your/project
 ```
 VibeCheck/
 ├── cloud/
-│   ├── agent-ts/            # TypeScript 에이전트 (현재 활발히 관리)
-│   │   └── src/
-│   │       ├── agent.ts     # 메인 WebSocket 에이전트, 스킬·스케줄러 통합
-│   │       ├── claude.ts    # Claude Agent SDK 래퍼 (스트리밍, 도구, 세션)
-│   │       ├── protocol.ts  # WebSocket 메시지 타입 정의
-│   │       ├── skills.ts    # 내장 스킬 프리셋
-│   │       ├── scheduler.ts # cron 기반 태스크 스케줄러
-│   │       └── security.ts  # 경로 기반 접근 제어
-│   └── agent/               # Python 에이전트 (레거시, PyPI)
-├── self-hosted/
-│   ├── main.py              # 셀프 호스팅 Slack 봇
-│   ├── setup.sh
-│   └── run.sh
-├── assets/
-│   ├── architecture.png
-│   ├── ux_demo.png
-│   └── security_flow.png
+│   └── agent-ts/              # 클라우드 에이전트 (npm: vibecheck-agent)
+│       └── src/
+│           ├── agent.ts       # WebSocket 에이전트, 스킬·스케줄러 통합
+│           ├── claude.ts      # Claude Agent SDK 래퍼 (스트리밍, 도구, 세션)
+│           ├── protocol.ts    # WebSocket 메시지 타입 정의
+│           ├── sessions-scanner.ts  # 프로젝트 검색: 세션 탐색
+│           ├── skills.ts      # 내장 스킬 프리셋
+│           ├── scheduler.ts   # cron 기반 태스크 스케줄러
+│           └── security.ts    # 경로 기반 접근 제어
+├── self-hosted/               # 셀프 호스팅 서버 + 웹 UI
+│   ├── src/
+│   │   ├── server.ts          # Express + WebSocket 서버
+│   │   ├── core.ts            # 트랜스포트 독립 오케스트레이션
+│   │   ├── shared/            # 공유 모듈
+│   │   └── slack/             # Slack 연동 (선택)
+│   ├── static/index.html      # 웹 채팅 UI
+│   └── setup.sh
+├── assets/                    # README 이미지
+├── docs/
+│   └── self-hosted.md         # 셀프 호스팅 설치 가이드
 └── README.md
 ```
 
@@ -297,7 +300,7 @@ VibeCheck/
 
 ## 요구 사항
 
-- Node.js 18+ (TypeScript 에이전트) 또는 Python 3.8+ (레거시 에이전트)
+- Node.js 18+
 - Claude Code CLI (`claude` 명령어가 PATH에 있어야 함)
 - 웹 브라우저 (클라우드 버전) 또는 Slack 워크스페이스 (셀프 호스팅)
 
@@ -316,7 +319,7 @@ VibeCheck/
 
 ### 스크린샷이 생성되지 않는 경우
 - TypeScript 에이전트: `npx playwright install chromium`
-- Python 에이전트: `pip install playwright && playwright install chromium`
+- `npx playwright install chromium`
 
 ---
 

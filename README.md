@@ -6,7 +6,7 @@
 [![Korean](https://img.shields.io/badge/Language-한국어-red)](./README_kr.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Agent-blue.svg)](./cloud/agent-ts/)
-[![PyPI](https://img.shields.io/pypi/v/vibecheck-agent?color=green)](https://pypi.org/project/vibecheck-agent/)
+[![npm](https://img.shields.io/npm/v/vibecheck-agent?color=green)](https://www.npmjs.com/package/vibecheck-agent)
 
 **VibeCheck** lets you control Claude Code CLI running on your server via web browser. Write and edit code from anywhere — home, cafe, or on the go.
 
@@ -73,7 +73,7 @@ Options:
   --server Custom server URL (optional)
 ```
 
-> **TypeScript agent** (`cloud/agent-ts/`) is the actively maintained implementation. The Python agent (`vibecheck-agent` on PyPI) is the legacy version.
+> The cloud agent (`cloud/agent-ts/`) is published on npm as [`vibecheck-agent`](https://www.npmjs.com/package/vibecheck-agent).
 
 ---
 
@@ -281,38 +281,27 @@ WORK_DIR=/path/to/your/project
 ```
 VibeCheck/
 ├── cloud/
-│   ├── agent-ts/             # TypeScript cloud agent (npm: vibecheck-agent)
-│   │   └── src/
-│   │       ├── agent.ts      # WebSocket agent, skill & scheduler integration
-│   │       ├── claude.ts     # Claude Agent SDK wrapper (streaming, tools)
-│   │       ├── protocol.ts   # WebSocket message type definitions
-│   │       ├── skills.ts     # Built-in skill presets
-│   │       ├── scheduler.ts  # Cron-based task scheduler
-│   │       └── security.ts   # Path-based access control
-│   └── agent/                # Python agent (legacy)
-├── self-hosted/           # Self-hosted TypeScript version
+│   └── agent-ts/              # Cloud agent (npm: vibecheck-agent)
+│       └── src/
+│           ├── agent.ts       # WebSocket agent, skill & scheduler integration
+│           ├── claude.ts      # Claude Agent SDK wrapper (streaming, tools)
+│           ├── protocol.ts    # WebSocket message type definitions
+│           ├── sessions-scanner.ts  # Browse Projects: session discovery
+│           ├── skills.ts      # Built-in skill presets
+│           ├── scheduler.ts   # Cron-based task scheduler
+│           └── security.ts    # Path-based access control
+├── self-hosted/               # Self-hosted server + web UI
 │   ├── src/
-│   │   ├── index.ts          # Entry point
-│   │   ├── config.ts         # Environment config + i18n
-│   │   ├── core.ts           # Transport-agnostic orchestration
-│   │   ├── server.ts         # Express + WebSocket server
-│   │   ├── cleaner.ts        # Output sanitization
-│   │   ├── protocol.ts       # WebSocket message types
-│   │   ├── shared/           # Shared modules (from cloud/agent-ts)
-│   │   │   ├── claude.ts     # Claude Agent SDK wrapper
-│   │   │   ├── security.ts   # Path-based access control
-│   │   │   ├── skills.ts     # Skill presets
-│   │   │   ├── scheduler.ts  # Cron task scheduler
-│   │   │   ├── images.ts     # Image tracking
-│   │   │   ├── screenshot.ts # Playwright screenshots
-│   │   │   └── session.ts    # Session persistence
-│   │   └── slack/            # Optional Slack integration
-│   │       ├── handler.ts    # @slack/bolt Socket Mode
-│   │       └── ui-builder.ts # Block Kit UI builders
-│   ├── static/index.html     # Web chat UI
+│   │   ├── index.ts           # Entry point
+│   │   ├── server.ts          # Express + WebSocket server
+│   │   ├── core.ts            # Transport-agnostic orchestration
+│   │   ├── shared/            # Shared modules
+│   │   └── slack/             # Optional Slack integration
+│   ├── static/index.html      # Web chat UI
 │   └── setup.sh
-├── self-hosted/              # Python version (legacy)
-├── assets/
+├── assets/                    # README images
+├── docs/
+│   └── self-hosted.md         # Self-hosted setup guide
 └── README.md
 ```
 
@@ -338,8 +327,7 @@ VibeCheck/
 - (Self-hosted) Verify **Event Subscriptions** → `message.im` is subscribed
 
 ### Screenshot not generating
-- TypeScript agent: `npx playwright install chromium`
-- Python agent: `pip install playwright && playwright install chromium`
+- `npx playwright install chromium`
 
 ---
 
