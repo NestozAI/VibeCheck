@@ -1,278 +1,143 @@
 # VibeCheck
 
-> **Remote control Claude Code from anywhere.**
+> **Run Claude Code on your server. Access it from anywhere.**
 
 [![English](https://img.shields.io/badge/Language-English-blue)](./README.md)
 [![Korean](https://img.shields.io/badge/Language-한국어-red)](./README_kr.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![TypeScript](https://img.shields.io/badge/TypeScript-Agent-blue.svg)](./cloud/agent-ts/)
 [![npm](https://img.shields.io/npm/v/vibecheck-agent?color=green)](https://www.npmjs.com/package/vibecheck-agent)
 
-**VibeCheck** lets you control Claude Code CLI running on your server via web browser. Write and edit code from anywhere — home, cafe, or on the go.
+VibeCheck runs a Claude Code agent on your server 24/7. You connect from any device — laptop, phone, tablet — through a web browser. Your computer doesn't need to be on. Sessions persist across devices: start coding on your PC, continue from your phone, pick it back up on your laptop.
 
 <p align="center">
-  <img src="./assets/demo.gif" alt="VibeCheck Demo" width="280"/>
+  <img src="./assets/demo.gif" alt="VibeCheck Demo" width="600"/>
 </p>
 
 ---
 
-## Choose Your Version
+## Why VibeCheck?
 
-| **🛠️ Self-Hosted (Open Source)** | **☁️ Cloud Version** |
-| :--- | :--- |
-| ✅ **Free** - use your own server | ⚡ **No server setup** - just install and go |
-| 🌐 Built-in web UI + optional Slack | 🌐 Web-based chat interface |
-| 💻 Full control over your environment | 📦 `curl` one-liner install |
-| [👇 **See installation guide below**](#self-hosted-setup) | [👉 **Get Started**](https://vibecheck.sotaaz.com) |
+### Your server never sleeps
+Claude Code runs headless on your server as a background service. Close your laptop, go home — the agent keeps running. Come back tomorrow and pick up where you left off.
 
----
+### Code from any device
+Open a browser, connect to your agent. Works on desktop, mobile, any device with a web browser. No app to install.
 
-## Features
-
-- **Natural Language Coding** — Chat with Claude to write, modify, and execute code
-- **Real-Time Streaming** — See Claude's response token-by-token as it's generated
-- **Tool Visualization** — Watch which tools Claude is using in real time ("Reading file…", "Running command…")
-- **Skills System** — Select specialized agent presets that change Claude's behavior and tool access
-- **Task Scheduler** — Automate recurring tasks with cron expressions (daily git pulls, weekly dependency audits, etc.)
-- **Visual Feedback** — Auto-generated HTML/project preview screenshots sent in chat
-- **Image Upload** — Drag & drop images directly in the chat window
-- **Security Layer** — Path-based access control with one-time or permanent approval
-- **Session Continuity** — Conversations persist across messages and reconnects
-- **Cost Tracking** — Every response includes USD cost and token breakdown (input/output/cache)
-- **Model Selection** — Switch between Claude models per query
-- **Custom System Prompt** — Inject a system prompt for any individual query
-- **Custom Sub-Agents** — Define named agents (via the Task tool) for multi-agent workflows
+### Sessions follow you
+Start a conversation on your PC, resume it from your phone. Browse all your Claude Code projects and sessions. The same `.jsonl` history is shared — CLI and web see the same conversation.
 
 ---
 
-## Cloud Version
+## Quick Start
 
-The easiest way to use VibeCheck. No server setup needed!
+### Cloud (Easiest)
 
-### Quick Start
+1. Visit [vibecheck.sotaaz.com](https://vibecheck.sotaaz.com) and sign in
+2. Run the install command on your server:
 
-#### 1. Sign In
-Visit [vibecheck.sotaaz.com](https://vibecheck.sotaaz.com) and sign in with your email.
-
-#### 2. Install & Run Agent
-Copy the one-liner curl command from dashboard and run it on your server:
 ```bash
 curl -sL https://vibecheck.sotaaz.com/install/YOUR_API_KEY | bash
 ```
 
-That's it! Open the Chat page and start coding.
+3. Open Chat and start coding.
 
-### Agent Options
-
-```bash
-vibecheck-agent --key YOUR_API_KEY --dir /path/to/project
-
-Options:
-  --key    Your VibeCheck API key (vibe_sk_...)
-  --dir    Working directory (default: current directory)
-  --server Custom server URL (optional)
-```
-
-> The cloud agent (`cloud/agent-ts/`) is published on npm as [`vibecheck-agent`](https://www.npmjs.com/package/vibecheck-agent).
-
----
-
-## Skills System
-
-Skills are agent presets — each one configures Claude's system prompt and tool permissions for a specific job.
-
-| Skill | Tools | Purpose |
-|-------|-------|---------|
-| 🔭 Research Agent | Read, Grep, Glob, WebSearch, WebFetch | Codebase analysis, info gathering |
-| 💻 Coding Agent | All tools | Writing & editing code |
-| 🔍 Code Review | Read, Grep, Glob | Bug, security & quality review |
-| 🧪 Test Runner | Read, Glob, Bash | Run tests and summarize results |
-| 📦 Dependency Audit | Read, Glob, Bash | Vulnerability & update checks |
-| 📋 Git Summary | Read, Bash | Commit history digest |
-| 📝 Doc Writer | Read, Write, Glob | README and inline docs |
-
-The web UI sends `skill_id` with the query. The agent fetches the matching preset and applies it for that request only.
-
----
-
-## Task Scheduler
-
-Automate tasks on a cron schedule:
-
-```jsonc
-// Server → Agent
-{ "type": "schedule_add", "cron": "0 9 * * 1-5", "message": "Run tests and report failures", "skill_id": "test-runner" }
-
-// Agent fires every weekday at 9 AM, sends result to web UI automatically
-```
-
-Schedules persist to `~/.vibecheck/schedules.json` and survive agent restarts. If a user query is in progress when a schedule fires, the task is queued and runs immediately after.
-
----
-
-## WebSocket Protocol
-
-The TypeScript agent communicates with the server over WebSocket. All messages are JSON.
-
-### Agent → Server
-
-| Message | Description |
-|---------|-------------|
-| `response` | Final answer with `result`, `cost_usd`, `num_turns`, `usage` (token breakdown), optional `images` |
-| `streaming_chunk` | Incremental text delta (`delta`, `index`) — emitted while Claude is generating |
-| `tool_status` | Tool start/end event with `tool`, `status`, `label`, optional `detail` |
-| `approval_required` | Requests user approval for out-of-scope paths |
-| `session_sync` | Reports current `work_dir` and `session_id` on connect |
-| `session_update` | Notifies server when session ID changes |
-| `skill_list_response` | Returns all available skill presets |
-| `schedule_list_response` | Returns all scheduled tasks |
-| `schedule_add_response` | Result of adding a new task |
-| `ping` / `pong` | Keepalive |
-
-### Server → Agent
-
-| Message | Description |
-|---------|-------------|
-| `query` | Run a query — supports `model`, `skill_id`, `system_prompt`, `agents` |
-| `approval` | User's response to an approval request |
-| `interrupt` | Abort the current query |
-| `add_trusted_path` | Permanently trust a file path |
-| `skill_list` | Request the list of available skills |
-| `schedule_add` | Add a new scheduled task |
-| `schedule_remove` | Remove a task by ID |
-| `schedule_toggle` | Enable or disable a task |
-| `schedule_list` | Request all scheduled tasks |
-| `session_info` | Sync session ID from server |
-| `ping` / `pong` | Keepalive |
-
-### `query` message fields
-
-```jsonc
-{
-  "type": "query",
-  "message": "Refactor the auth module",
-  "model": "claude-opus-4-5",         // optional — model override
-  "skill_id": "coding",               // optional — skill preset
-  "system_prompt": "Reply in Korean", // optional — per-query system prompt
-  "agents": {                         // optional — custom sub-agents
-    "reviewer": {
-      "description": "Code quality reviewer",
-      "prompt": "Focus on security and correctness",
-      "tools": ["Read", "Grep"]
-    }
-  }
-}
-```
-
----
-
-## Security System
-
-VibeCheck includes a path-based security system to protect your file system.
-
-![Security Flow](./assets/security_flow.png)
-
-### How It Works
-
-1. **Trusted Paths** — Only the working directory is trusted by default
-2. **Path Detection** — When Claude tries to access paths outside trusted directories, the agent intercepts it
-3. **Approval UI** — An approval request appears in the web UI:
-   - **Approve** — One-time access
-   - **Approve (Permanent)** — Add to trusted paths list
-   - **Deny** — Cancel the operation
-
-### Auto-Approved Commands
-
-These read-only system commands are always allowed:
-
-```
-nvidia-smi, df, free, uptime, whoami, hostname,
-cat /proc/cpuinfo, cat /proc/meminfo, ps, top,
-ls, pwd, date, which, echo
-```
-
----
-
-## Self-Hosted Setup
-
-For users who want full control over their own server. Includes a **built-in web UI** — no Slack required. Slack integration is available as an optional add-on.
-
-### Quick Start
+### Self-Hosted (Free)
 
 ```bash
 git clone https://github.com/NestozAI/VibeCheck
 cd VibeCheck/self-hosted
 ./setup.sh
-# Open http://localhost:8501 in your browser
+# Open http://localhost:8501
 ```
 
-Or manually:
+See [Self-Hosted Guide](./docs/self-hosted.md) for Slack integration and advanced setup.
+
+### Agent Only
 
 ```bash
-git clone https://github.com/NestozAI/VibeCheck
-cd VibeCheck/self-hosted
-npm install
-cp .env.example .env   # edit as needed
-npm run dev
+npm i -g vibecheck-agent
+vibecheck-agent --key YOUR_API_KEY --dir /path/to/project
 ```
 
-<details>
-<summary>Slack App Configuration Guide</summary>
+---
 
-#### Step 1: Create a Slack App
+## Features
 
-1. Go to [api.slack.com/apps](https://api.slack.com/apps)
-2. Click **"Create New App"** → **"From scratch"**
-3. Enter App Name (e.g., "VibeCheck") and select your workspace
+### Multi-Device Access
+- **Web UI** — Full chat interface in your browser, works on mobile
+- **Session Resume** — Pick up any previous conversation from any device
+- **Browse All Projects** — Discover all Claude Code projects on the server, switch between them
+- **Cross-Device History** — Web conversations appear in CLI, and vice versa
 
-#### Step 2: Enable Socket Mode
+### Real-Time Coding
+- **Streaming Responses** — See Claude's output token-by-token as it generates
+- **Tool Visualization** — Watch Claude work: "Reading file...", "Running command...", "Editing code..."
+- **Image Upload** — Drag & drop screenshots and images directly into the chat
+- **Visual Feedback** — Auto-generated project preview screenshots
 
-1. Navigate to **Settings → Socket Mode**
-2. Toggle **Enable Socket Mode** to ON
-3. Click **"Generate"** to create an App-Level Token
-   - Token Name: `vibecheck-socket`
-   - Scope: `connections:write`
-4. Copy the token starting with `xapp-...` → This is your `SLACK_APP_TOKEN`
+### Agent Management
+- **Skills System** — Switch between agent presets (Research, Coding, Code Review, Test Runner, etc.)
+- **Task Scheduler** — Automate recurring tasks with cron (daily git pulls, weekly audits)
+- **Model Selection** — Choose Claude model per query (Opus, Sonnet, Haiku)
+- **Custom Sub-Agents** — Define specialized agents for multi-agent workflows
+- **Cost Tracking** — USD cost and token breakdown for every response
 
-#### Step 3: Configure Bot Token Scopes
+### Security
+- **Path-Based Access Control** — Only the working directory is trusted by default
+- **Approval UI** — Approve or deny access to paths outside the sandbox
+- **Auto-Restart** — Service auto-restarts when the agent package is updated
 
-Navigate to **OAuth & Permissions → Bot Token Scopes** and add:
+---
 
-| Scope | Description |
-|-------|-------------|
-| `chat:write` | Send messages as the bot |
-| `files:write` | Upload images and files |
-| `im:history` | Read DM message history |
-| `im:read` | Access DM channel info |
-| `im:write` | Start direct messages |
-| `users:read` | View user information |
+## How It Works
 
-#### Step 4: Enable Events
-
-1. Navigate to **Event Subscriptions**
-2. Toggle **Enable Events** to ON
-3. Under **Subscribe to bot events**, add:
-   - `message.im`
-   - `app_mention`
-   - `app_home_opened`
-
-#### Step 5–7: Interactivity, App Home, Install
-
-1. **Interactivity & Shortcuts** → Enable Interactivity
-2. **App Home** → Enable Home Tab and Messages Tab; allow slash commands
-3. **OAuth & Permissions** → Install to Workspace; copy `xoxb-...` Bot Token
-
-#### Step 8: Configure Environment
-
-Create `.env` in `self-hosted/`:
-
-```bash
-SLACK_BOT_TOKEN=xoxb-your-bot-token-here
-SLACK_APP_TOKEN=xapp-your-app-token-here
-WORK_DIR=/path/to/your/project
+```
+┌─────────────┐     ┌──────────────────┐     ┌─────────────────┐
+│  Your Phone │────▶│  VibeCheck Server │◀────│  Your Laptop    │
+│  (browser)  │     │  (WebSocket hub)  │     │  (browser/CLI)  │
+└─────────────┘     └────────┬─────────┘     └─────────────────┘
+                             │
+                    ┌────────▼─────────┐
+                    │  Your Server     │
+                    │  vibecheck-agent  │
+                    │  (Claude Code)   │
+                    └──────────────────┘
 ```
 
-</details>
+The agent runs Claude Code via the [Claude Agent SDK](https://github.com/anthropics/claude-agent-sdk). It connects to the server over WebSocket. Web clients connect to the same server. Messages flow both ways in real time.
+
+Session history is stored in `~/.claude/projects/` as `.jsonl` files — the same format Claude Code CLI uses. This means:
+- Sessions started from the web are visible in `claude` CLI
+- Sessions started from CLI can be resumed from the web
+- Browse All Projects discovers every session across all projects
+
+---
+
+## vs Alternatives
+
+| | **VibeCheck** | **Happy Coder** | **Raw SSH** |
+|---|---|---|---|
+| Claude runs on | **Server** (headless, 24/7) | Your PC (must stay on) | Your PC |
+| Access from | Any browser | Mobile app only | Terminal only |
+| PC can be off? | **Yes** | No | No |
+| Install | `npm i -g` + one command | `npm i -g` + run wrapper | N/A |
+| Session sharing | Web + CLI share `.jsonl` | Mobile controls PC session | N/A |
+| Open source | MIT | MIT | N/A |
+| App required | No (web browser) | Yes (iOS/Android app) | No |
+
+---
+
+## Skills
+
+| Skill | Tools | Purpose |
+|-------|-------|---------|
+| Research Agent | Read, Grep, Glob, WebSearch, WebFetch | Codebase analysis, info gathering |
+| Coding Agent | All tools | Writing & editing code |
+| Code Review | Read, Grep, Glob | Bug, security & quality review |
+| Test Runner | Read, Glob, Bash | Run tests and summarize |
+| Dependency Audit | Read, Glob, Bash | Vulnerability & update checks |
+| Git Summary | Read, Bash | Commit history digest |
+| Doc Writer | Read, Write, Glob | README and inline docs |
 
 ---
 
@@ -283,25 +148,22 @@ VibeCheck/
 ├── cloud/
 │   └── agent-ts/              # Cloud agent (npm: vibecheck-agent)
 │       └── src/
-│           ├── agent.ts       # WebSocket agent, skill & scheduler integration
-│           ├── claude.ts      # Claude Agent SDK wrapper (streaming, tools)
-│           ├── protocol.ts    # WebSocket message type definitions
-│           ├── sessions-scanner.ts  # Browse Projects: session discovery
+│           ├── agent.ts       # WebSocket agent, session management
+│           ├── claude.ts      # Claude Agent SDK wrapper
+│           ├── sessions-scanner.ts  # Project & session discovery
 │           ├── skills.ts      # Built-in skill presets
 │           ├── scheduler.ts   # Cron-based task scheduler
 │           └── security.ts    # Path-based access control
 ├── self-hosted/               # Self-hosted server + web UI
 │   ├── src/
-│   │   ├── index.ts           # Entry point
 │   │   ├── server.ts          # Express + WebSocket server
 │   │   ├── core.ts            # Transport-agnostic orchestration
-│   │   ├── shared/            # Shared modules
 │   │   └── slack/             # Optional Slack integration
-│   ├── static/index.html      # Web chat UI
-│   └── setup.sh
+│   └── static/index.html      # Web chat UI
 ├── assets/                    # README images
 ├── docs/
-│   └── self-hosted.md         # Self-hosted setup guide
+│   ├── self-hosted.md         # Self-hosted setup guide
+│   └── protocol.md            # WebSocket protocol reference
 └── README.md
 ```
 
@@ -310,24 +172,21 @@ VibeCheck/
 ## Requirements
 
 - Node.js 18+
-- Claude Code CLI (`claude` command in PATH)
+- Claude Code CLI (`claude` in PATH)
 - Web browser
 
 ---
 
 ## Troubleshooting
 
-### Agent not connecting
-- Check your API key is correct
+**Agent not connecting?**
+- Verify your API key is correct
 - Ensure `claude` CLI is installed and in PATH
-- Check internet connection and firewall rules
+- Check firewall rules (WebSocket port must be open)
 
-### Not receiving responses
-- (Cloud) Make sure the agent process is running; check the Chat page
-- (Self-hosted) Verify **Event Subscriptions** → `message.im` is subscribed
-
-### Screenshot not generating
-- `npx playwright install chromium`
+**No responses?**
+- Confirm the agent process is running (`systemctl status vibecheck-agent`)
+- Check agent logs: `journalctl -u vibecheck-agent -f`
 
 ---
 
@@ -337,12 +196,12 @@ MIT
 
 ## Contributing
 
-Contributions are welcome! Please open an issue or submit a pull request.
+Issues and pull requests are welcome!
 
 ---
 
 <p align="center">
   <a href="https://vibecheck.sotaaz.com">
-    <img src="https://img.shields.io/badge/Try_VibeCheck_Cloud-00ff00?style=for-the-badge" alt="Try VibeCheck Cloud">
+    <img src="https://img.shields.io/badge/Try_VibeCheck-00ff00?style=for-the-badge" alt="Try VibeCheck">
   </a>
 </p>

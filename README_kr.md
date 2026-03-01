@@ -1,270 +1,143 @@
 # VibeCheck
 
-> **어디서든 Claude Code를 원격 제어하세요.**
+> **서버에서 Claude Code를 실행하고, 어디서든 접속하세요.**
 
 [![English](https://img.shields.io/badge/Language-English-blue)](./README.md)
 [![Korean](https://img.shields.io/badge/Language-한국어-red)](./README_kr.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![TypeScript](https://img.shields.io/badge/TypeScript-Agent-blue.svg)](./cloud/agent-ts/)
 [![npm](https://img.shields.io/npm/v/vibecheck-agent?color=green)](https://www.npmjs.com/package/vibecheck-agent)
 
-**VibeCheck**는 서버에서 실행 중인 Claude Code CLI를 웹 브라우저로 제어할 수 있게 합니다. 집, 카페, 어디서든 코드를 작성하고 수정하세요.
+VibeCheck은 서버에서 Claude Code 에이전트를 24시간 실행합니다. 노트북, 폰, 태블릿 — 웹 브라우저가 있는 어떤 기기에서든 접속할 수 있습니다. PC가 꺼져 있어도 됩니다. 세션은 기기 간에 이어집니다: PC에서 코딩을 시작하고, 폰에서 이어하고, 노트북에서 다시 확인하세요.
+
+<p align="center">
+  <img src="./assets/demo.gif" alt="VibeCheck Demo" width="600"/>
+</p>
 
 ---
 
-## 버전 선택
+## 왜 VibeCheck인가?
 
-| **🛠️ 셀프 호스팅 (오픈소스)** | **☁️ 클라우드 버전** |
-| :--- | :--- |
-| ✅ **무료** - 본인 서버 사용 | ⚡ **서버 설정 불필요** - 설치 즉시 사용 |
-| 💻 환경 완전 제어 | 🌐 웹 기반 채팅 인터페이스 |
-| 🔧 직접 설치 & 관리 | 📦 `curl` 원라이너 설치 |
-| [👇 **설치 가이드 보기**](#셀프-호스팅-설정) | [👉 **시작하기**](https://vibecheck.sotaaz.com) |
+### 서버는 절대 꺼지지 않습니다
+Claude Code가 서버에서 백그라운드 서비스로 실행됩니다. 노트북 닫고 퇴근해도 에이전트는 계속 돌아갑니다. 내일 와서 이어서 하면 됩니다.
 
----
+### 어떤 기기에서든 코딩
+브라우저 열고 에이전트에 접속하세요. 데스크탑, 모바일, 웹 브라우저가 있는 모든 기기에서 동작합니다. 앱 설치가 필요 없습니다.
 
-## 기능
-
-- **자연어 코딩** — 채팅으로 Claude에게 코드 작성·수정·실행 지시
-- **실시간 스트리밍** — Claude가 응답을 생성하는 동안 토큰 단위로 실시간 확인
-- **도구 시각화** — Claude가 현재 어떤 도구를 사용하는지 실시간 표시 ("파일 읽는 중…", "명령 실행 중…")
-- **스킬 시스템** — Claude의 동작과 도구 권한을 바꾸는 에이전트 프리셋 선택
-- **태스크 스케줄러** — cron 표현식으로 반복 작업 자동화 (매일 git pull, 주간 의존성 감사 등)
-- **시각적 피드백** — HTML/프로젝트 미리보기 스크린샷 자동 생성 후 채팅에 전송
-- **이미지 업로드** — 채팅 창에 이미지 드래그 앤 드롭 지원
-- **보안 레이어** — 경로 기반 접근 제어, 일회성/영구 승인 시스템
-- **세션 연속성** — 메시지와 재연결 사이에도 대화 내용 유지
-- **비용 추적** — 모든 응답에 USD 비용 및 토큰 사용량 상세 포함
-- **모델 선택** — 쿼리별로 Claude 모델 지정 가능
-- **커스텀 시스템 프롬프트** — 개별 쿼리에 시스템 프롬프트 직접 주입
-- **커스텀 서브에이전트** — Task 도구를 통한 멀티에이전트 워크플로우 정의
+### 세션이 따라옵니다
+PC에서 시작한 대화를 폰에서 이어갈 수 있습니다. 모든 Claude Code 프로젝트와 세션을 탐색하세요. 같은 `.jsonl` 히스토리를 공유하기 때문에 CLI와 웹에서 동일한 대화가 보입니다.
 
 ---
 
-## 클라우드 버전
+## 빠른 시작
 
-가장 간편한 사용 방법입니다. 서버 설정이 필요 없어요!
+### 클라우드 (가장 간편)
 
-### 빠른 시작
+1. [vibecheck.sotaaz.com](https://vibecheck.sotaaz.com)에서 로그인
+2. 서버에서 설치 명령어 실행:
 
-#### 1. 로그인
-[vibecheck.sotaaz.com](https://vibecheck.sotaaz.com)에서 이메일로 로그인합니다.
-
-#### 2. 에이전트 설치 & 실행
-대시보드에서 원클릭 curl 명령어를 복사해 서버에서 실행하세요:
 ```bash
 curl -sL https://vibecheck.sotaaz.com/install/YOUR_API_KEY | bash
 ```
 
-끝입니다! Chat 페이지를 열고 코딩을 시작하세요.
+3. Chat 페이지를 열고 코딩 시작.
 
-### 에이전트 옵션
-
-```bash
-vibecheck-agent --key YOUR_API_KEY --dir /path/to/project
-
-옵션:
-  --key    VibeCheck API 키 (vibe_sk_...)
-  --dir    작업 디렉토리 (기본값: 현재 디렉토리)
-  --server 커스텀 서버 URL (선택 사항)
-```
-
-> 클라우드 에이전트(`cloud/agent-ts/`)는 npm에 [`vibecheck-agent`](https://www.npmjs.com/package/vibecheck-agent)로 배포됩니다.
-
----
-
-## 스킬 시스템
-
-스킬은 에이전트 프리셋으로, 작업 유형에 따라 Claude의 시스템 프롬프트와 도구 권한을 설정합니다.
-
-| 스킬 | 허용 도구 | 용도 |
-|------|----------|------|
-| 🔭 리서치 에이전트 | Read, Grep, Glob, WebSearch, WebFetch | 코드베이스 분석, 정보 수집 |
-| 💻 코딩 에이전트 | 전체 | 코드 작성 및 수정 |
-| 🔍 코드 리뷰 | Read, Grep, Glob | 버그·보안·품질 검토 |
-| 🧪 테스트 실행 | Read, Glob, Bash | 테스트 실행 및 요약 |
-| 📦 의존성 감사 | Read, Glob, Bash | 취약점·업데이트 확인 |
-| 📋 Git 요약 | Read, Bash | 커밋 히스토리 요약 |
-| 📝 문서 작성 | Read, Write, Glob | README 및 인라인 문서 |
-
-웹 UI에서 `skill_id`를 쿼리와 함께 전송하면, 에이전트가 해당 프리셋을 적용해 Claude를 실행합니다.
-
----
-
-## 태스크 스케줄러
-
-cron 스케줄로 작업을 자동화하세요:
-
-```jsonc
-// 서버 → 에이전트
-{ "type": "schedule_add", "cron": "0 9 * * 1-5", "message": "테스트 실행 후 실패 보고해줘", "skill_id": "test-runner" }
-
-// 에이전트가 평일 오전 9시마다 자동 실행 후 결과를 웹 UI로 전송
-```
-
-스케줄은 `~/.vibecheck/schedules.json`에 저장되어 에이전트 재시작 후에도 유지됩니다.  
-사용자 쿼리 진행 중에 스케줄이 발생하면 큐에 저장되었다가 쿼리 완료 후 자동으로 실행됩니다.
-
----
-
-## WebSocket 프로토콜
-
-TypeScript 에이전트는 WebSocket으로 서버와 통신합니다. 모든 메시지는 JSON 형식입니다.
-
-### 에이전트 → 서버
-
-| 메시지 | 설명 |
-|--------|------|
-| `response` | 최종 응답 — `result`, `cost_usd`, `num_turns`, `usage`(토큰 상세), 선택적 `images` 포함 |
-| `streaming_chunk` | 실시간 텍스트 델타 (`delta`, `index`) — Claude 생성 중 지속 전송 |
-| `tool_status` | 도구 시작/종료 이벤트 (`tool`, `status`, `label`, 선택적 `detail`) |
-| `approval_required` | 작업 범위 밖 경로 접근에 대한 사용자 승인 요청 |
-| `session_sync` | 연결 시 현재 `work_dir`와 `session_id` 보고 |
-| `session_update` | 세션 ID 변경 시 서버에 알림 |
-| `skill_list_response` | 사용 가능한 스킬 목록 반환 |
-| `schedule_list_response` | 등록된 스케줄 태스크 목록 반환 |
-| `schedule_add_response` | 태스크 추가 결과 |
-| `ping` / `pong` | 연결 유지 |
-
-### 서버 → 에이전트
-
-| 메시지 | 설명 |
-|--------|------|
-| `query` | 쿼리 실행 — `model`, `skill_id`, `system_prompt`, `agents` 지원 |
-| `approval` | 승인 요청에 대한 사용자 응답 |
-| `interrupt` | 현재 쿼리 중단 |
-| `add_trusted_path` | 파일 경로를 영구 신뢰 목록에 추가 |
-| `skill_list` | 스킬 목록 요청 |
-| `schedule_add` | 새 스케줄 태스크 추가 |
-| `schedule_remove` | ID로 태스크 삭제 |
-| `schedule_toggle` | 태스크 활성화/비활성화 |
-| `schedule_list` | 스케줄 태스크 목록 요청 |
-| `session_info` | 서버에서 세션 ID 동기화 |
-| `ping` / `pong` | 연결 유지 |
-
-### `query` 메시지 필드
-
-```jsonc
-{
-  "type": "query",
-  "message": "인증 모듈 리팩토링해줘",
-  "model": "claude-opus-4-5",          // 선택 — 모델 지정
-  "skill_id": "coding",                // 선택 — 스킬 프리셋
-  "system_prompt": "항상 한국어로 답변해줘", // 선택 — 쿼리별 시스템 프롬프트
-  "agents": {                          // 선택 — 커스텀 서브에이전트
-    "reviewer": {
-      "description": "코드 품질 검토 에이전트",
-      "prompt": "보안과 정확성을 중심으로 검토해줘",
-      "tools": ["Read", "Grep"]
-    }
-  }
-}
-```
-
----
-
-## 보안 시스템
-
-VibeCheck는 파일 시스템을 보호하기 위한 경로 기반 보안 시스템을 포함합니다.
-
-### 동작 방식
-
-1. **신뢰 경로** — 기본적으로 작업 디렉토리만 신뢰됨
-2. **경로 감지** — Claude가 신뢰 범위 밖의 경로에 접근하려 할 때 에이전트가 이를 차단
-3. **승인 UI** — 웹 UI에 승인 요청 표시:
-   - **승인** — 이번 한 번만 허용
-   - **영구 승인** — 신뢰 경로 목록에 추가
-   - **거부** — 작업 취소
-
-### 자동 승인 명령어
-
-다음 읽기 전용 시스템 명령은 항상 자동 허용됩니다:
-
-```
-nvidia-smi, df, free, uptime, whoami, hostname,
-cat /proc/cpuinfo, cat /proc/meminfo, ps, top,
-ls, pwd, date, which, echo
-```
-
----
-
-## 셀프 호스팅 설정
-
-서버와 Slack 앱을 직접 관리하고 싶은 사용자를 위한 설정입니다.
-
-### 빠른 시작
-
-#### Linux / macOS
+### 셀프 호스팅 (무료)
 
 ```bash
 git clone https://github.com/NestozAI/VibeCheck
 cd VibeCheck/self-hosted
 ./setup.sh
-./run.sh
+# http://localhost:8501 접속
 ```
 
-#### Windows
+Slack 연동 등 상세 설정은 [셀프 호스팅 가이드](./docs/self-hosted.md)를 참고하세요.
 
-```cmd
-git clone https://github.com/NestozAI/VibeCheck
-cd VibeCheck\self-hosted
-setup.bat
-run.bat
-```
-
-<details>
-<summary>Slack 앱 설정 가이드 펼치기</summary>
-
-#### 1단계: Slack 앱 생성
-
-1. [api.slack.com/apps](https://api.slack.com/apps) 접속
-2. **"Create New App"** → **"From scratch"**
-3. 앱 이름(예: "VibeCheck") 입력 후 워크스페이스 선택
-
-#### 2단계: Socket Mode 활성화
-
-1. **Settings → Socket Mode** 이동
-2. **Enable Socket Mode** 켜기
-3. **"Generate"** 클릭 → App-Level Token 생성
-   - 이름: `vibecheck-socket`, Scope: `connections:write`
-4. `xapp-...`로 시작하는 토큰 복사 → `SLACK_APP_TOKEN`
-
-#### 3단계: Bot Token Scopes 설정
-
-**OAuth & Permissions → Bot Token Scopes**에 다음 추가:
-
-| Scope | 설명 |
-|-------|------|
-| `chat:write` | 봇으로 메시지 전송 |
-| `files:write` | 이미지 및 파일 업로드 |
-| `im:history` | DM 히스토리 읽기 |
-| `im:read` | DM 채널 정보 접근 |
-| `im:write` | 다이렉트 메시지 시작 |
-| `users:read` | 사용자 정보 조회 |
-
-#### 4단계: 이벤트 활성화
-
-1. **Event Subscriptions** 이동
-2. **Enable Events** 켜기
-3. **Subscribe to bot events** 추가: `message.im`, `app_mention`, `app_home_opened`
-
-#### 5~7단계: Interactivity, App Home, 설치
-
-1. **Interactivity & Shortcuts** → Interactivity 활성화
-2. **App Home** → Home Tab, Messages Tab 활성화
-3. **OAuth & Permissions** → Install to Workspace → `xoxb-...` 토큰 복사
-
-#### 8단계: 환경 변수 설정
-
-`self-hosted/.env` 파일 생성:
+### 에이전트만 설치
 
 ```bash
-SLACK_BOT_TOKEN=xoxb-your-bot-token-here
-SLACK_APP_TOKEN=xapp-your-app-token-here
-WORK_DIR=/path/to/your/project
+npm i -g vibecheck-agent
+vibecheck-agent --key YOUR_API_KEY --dir /path/to/project
 ```
 
-</details>
+---
+
+## 주요 기능
+
+### 멀티 디바이스
+- **웹 UI** — 브라우저에서 동작하는 풀 채팅 인터페이스, 모바일 지원
+- **세션 이어가기** — 어떤 기기에서든 이전 대화를 이어서 진행
+- **프로젝트 탐색** — 서버의 모든 Claude Code 프로젝트를 검색하고 전환
+- **크로스 디바이스 히스토리** — 웹 대화가 CLI에서 보이고, CLI 대화가 웹에서 보임
+
+### 실시간 코딩
+- **스트리밍 응답** — Claude가 생성하는 동안 토큰 단위로 실시간 확인
+- **도구 시각화** — Claude의 작업 과정 표시: "파일 읽는 중...", "명령 실행 중...", "코드 수정 중..."
+- **이미지 업로드** — 스크린샷과 이미지를 채팅에 드래그 앤 드롭
+- **시각적 피드백** — 프로젝트 미리보기 스크린샷 자동 생성
+
+### 에이전트 관리
+- **스킬 시스템** — 에이전트 프리셋 전환 (리서치, 코딩, 코드 리뷰, 테스트 등)
+- **태스크 스케줄러** — cron으로 반복 작업 자동화 (매일 git pull, 주간 감사)
+- **모델 선택** — 쿼리별 Claude 모델 지정 (Opus, Sonnet, Haiku)
+- **커스텀 서브에이전트** — 멀티에이전트 워크플로우용 전문 에이전트 정의
+- **비용 추적** — 모든 응답에 USD 비용 및 토큰 상세 표시
+
+### 보안
+- **경로 기반 접근 제어** — 기본적으로 작업 디렉토리만 신뢰
+- **승인 UI** — 샌드박스 밖 경로 접근 시 승인/거부 선택
+- **자동 재시작** — 에이전트 패키지 업데이트 시 서비스 자동 재시작
+
+---
+
+## 동작 방식
+
+```
+┌─────────────┐     ┌──────────────────┐     ┌─────────────────┐
+│    폰       │────▶│  VibeCheck 서버   │◀────│   노트북/PC     │
+│  (브라우저)  │     │  (WebSocket 허브) │     │  (브라우저/CLI)  │
+└─────────────┘     └────────┬─────────┘     └─────────────────┘
+                             │
+                    ┌────────▼─────────┐
+                    │    서버          │
+                    │  vibecheck-agent  │
+                    │  (Claude Code)   │
+                    └──────────────────┘
+```
+
+에이전트는 [Claude Agent SDK](https://github.com/anthropics/claude-agent-sdk)를 통해 Claude Code를 실행합니다. WebSocket으로 서버에 연결되고, 웹 클라이언트도 같은 서버에 연결됩니다. 메시지가 양방향으로 실시간 전달됩니다.
+
+세션 히스토리는 `~/.claude/projects/`에 `.jsonl` 파일로 저장됩니다 — Claude Code CLI와 동일한 형식입니다. 따라서:
+- 웹에서 시작한 세션이 `claude` CLI에서 보입니다
+- CLI에서 시작한 세션을 웹에서 이어갈 수 있습니다
+- 프로젝트 탐색으로 모든 프로젝트의 세션을 검색할 수 있습니다
+
+---
+
+## 대안 비교
+
+| | **VibeCheck** | **Happy Coder** | **SSH** |
+|---|---|---|---|
+| Claude 실행 위치 | **서버** (headless, 24/7) | 내 PC (켜져 있어야 함) | 내 PC |
+| 접속 방법 | 아무 브라우저 | 모바일 앱 전용 | 터미널 전용 |
+| PC 꺼도 작동? | **가능** | 불가 | 불가 |
+| 설치 | `npm i -g` + 한 줄 명령 | `npm i -g` + 래퍼 실행 | 해당 없음 |
+| 세션 공유 | 웹 + CLI가 `.jsonl` 공유 | 모바일이 PC 세션 제어 | 해당 없음 |
+| 오픈소스 | MIT | MIT | 해당 없음 |
+| 앱 필요? | 불필요 (웹 브라우저) | 필요 (iOS/Android) | 불필요 |
+
+---
+
+## 스킬
+
+| 스킬 | 허용 도구 | 용도 |
+|------|----------|------|
+| 리서치 에이전트 | Read, Grep, Glob, WebSearch, WebFetch | 코드베이스 분석, 정보 수집 |
+| 코딩 에이전트 | 전체 | 코드 작성 및 수정 |
+| 코드 리뷰 | Read, Grep, Glob | 버그, 보안, 품질 검토 |
+| 테스트 실행 | Read, Glob, Bash | 테스트 실행 및 요약 |
+| 의존성 감사 | Read, Glob, Bash | 취약점 및 업데이트 확인 |
+| Git 요약 | Read, Bash | 커밋 히스토리 요약 |
+| 문서 작성 | Read, Write, Glob | README 및 인라인 문서 |
 
 ---
 
@@ -275,10 +148,9 @@ VibeCheck/
 ├── cloud/
 │   └── agent-ts/              # 클라우드 에이전트 (npm: vibecheck-agent)
 │       └── src/
-│           ├── agent.ts       # WebSocket 에이전트, 스킬·스케줄러 통합
-│           ├── claude.ts      # Claude Agent SDK 래퍼 (스트리밍, 도구, 세션)
-│           ├── protocol.ts    # WebSocket 메시지 타입 정의
-│           ├── sessions-scanner.ts  # 프로젝트 검색: 세션 탐색
+│           ├── agent.ts       # WebSocket 에이전트, 세션 관리
+│           ├── claude.ts      # Claude Agent SDK 래퍼
+│           ├── sessions-scanner.ts  # 프로젝트 및 세션 탐색
 │           ├── skills.ts      # 내장 스킬 프리셋
 │           ├── scheduler.ts   # cron 기반 태스크 스케줄러
 │           └── security.ts    # 경로 기반 접근 제어
@@ -286,13 +158,12 @@ VibeCheck/
 │   ├── src/
 │   │   ├── server.ts          # Express + WebSocket 서버
 │   │   ├── core.ts            # 트랜스포트 독립 오케스트레이션
-│   │   ├── shared/            # 공유 모듈
 │   │   └── slack/             # Slack 연동 (선택)
-│   ├── static/index.html      # 웹 채팅 UI
-│   └── setup.sh
+│   └── static/index.html      # 웹 채팅 UI
 ├── assets/                    # README 이미지
 ├── docs/
-│   └── self-hosted.md         # 셀프 호스팅 설치 가이드
+│   ├── self-hosted.md         # 셀프 호스팅 설치 가이드
+│   └── protocol.md            # WebSocket 프로토콜 레퍼런스
 └── README.md
 ```
 
@@ -302,24 +173,20 @@ VibeCheck/
 
 - Node.js 18+
 - Claude Code CLI (`claude` 명령어가 PATH에 있어야 함)
-- 웹 브라우저 (클라우드 버전) 또는 Slack 워크스페이스 (셀프 호스팅)
+- 웹 브라우저
 
 ---
 
 ## 문제 해결
 
-### 에이전트가 연결되지 않는 경우
+**에이전트가 연결되지 않나요?**
 - API 키가 올바른지 확인
 - `claude` CLI가 설치되어 PATH에 있는지 확인
-- 인터넷 연결 및 방화벽 규칙 확인
+- 방화벽 규칙 확인 (WebSocket 포트가 열려 있어야 함)
 
-### 응답이 오지 않는 경우
-- (클라우드) 에이전트 프로세스가 실행 중인지 확인
-- (셀프 호스팅) **Event Subscriptions** → `message.im` 구독 여부 확인
-
-### 스크린샷이 생성되지 않는 경우
-- TypeScript 에이전트: `npx playwright install chromium`
-- `npx playwright install chromium`
+**응답이 오지 않나요?**
+- 에이전트 프로세스가 실행 중인지 확인 (`systemctl status vibecheck-agent`)
+- 에이전트 로그 확인: `journalctl -u vibecheck-agent -f`
 
 ---
 
@@ -335,6 +202,6 @@ MIT
 
 <p align="center">
   <a href="https://vibecheck.sotaaz.com">
-    <img src="https://img.shields.io/badge/VibeCheck_Cloud_시작하기-00ff00?style=for-the-badge" alt="Try VibeCheck Cloud">
+    <img src="https://img.shields.io/badge/VibeCheck_시작하기-00ff00?style=for-the-badge" alt="Try VibeCheck">
   </a>
 </p>
