@@ -180,15 +180,26 @@ export function scanAllProjects(): ProjectSummary[] {
 
         if (sessionCount === 0) continue; // Skip projects with no sessions
 
-        // Get latest mtime cheaply: check sessions-index.json or directory mtime
-        // (avoids stat-ing every JSONL file — can be 1000+ files)
+        // Get latest mtime: use the most recent among directory mtime,
+        // sessions-index.json mtime, and the newest JSONL file (stat only last 3)
         let latestMtime = 0;
         try {
+          latestMtime = fs.statSync(dirPath).mtimeMs;
           const indexPath = path.join(dirPath, "sessions-index.json");
           if (fs.existsSync(indexPath)) {
-            latestMtime = fs.statSync(indexPath).mtimeMs;
-          } else {
-            latestMtime = fs.statSync(dirPath).mtimeMs;
+            const indexMtime = fs.statSync(indexPath).mtimeMs;
+            if (indexMtime > latestMtime) latestMtime = indexMtime;
+          }
+          // Check newest JSONL files (sorted by name desc = newest UUID first, stat only 3)
+          const jsonlFiles = entries
+            .filter(e => e.isFile() && e.name.endsWith(".jsonl"))
+            .map(e => e.name)
+            .sort().reverse().slice(0, 3);
+          for (const f of jsonlFiles) {
+            try {
+              const mt = fs.statSync(path.join(dirPath, f)).mtimeMs;
+              if (mt > latestMtime) latestMtime = mt;
+            } catch { /* skip */ }
           }
         } catch { /* fallback: 0 */ }
 
