@@ -39,38 +39,34 @@ export function scanClaudeCodeSessions(workDir: string): ClaudeCodeSession[] {
 
   if (!fs.existsSync(projectDir)) return [];
 
-  // Fast path: sessions-index.json
+  // Collect sessions from index
+  const indexSessions = new Map<string, ClaudeCodeSession>();
   const indexPath = path.join(projectDir, "sessions-index.json");
   if (fs.existsSync(indexPath)) {
     try {
       const data = JSON.parse(fs.readFileSync(indexPath, "utf-8"));
       if (data.entries && Array.isArray(data.entries)) {
-        return data.entries
-          .filter((e: Record<string, unknown>) => !e.isSidechain)
-          .map((e: Record<string, unknown>) => ({
-            sessionId: e.sessionId as string,
+        for (const e of data.entries) {
+          if (e.isSidechain) continue;
+          const sid = e.sessionId as string;
+          indexSessions.set(sid, {
+            sessionId: sid,
             firstPrompt: (e.firstPrompt as string) || "",
             messageCount: (e.messageCount as number) || 0,
             created: (e.created as string) || "",
             modified: (e.modified as string) || "",
             gitBranch: e.gitBranch as string | undefined,
             projectPath: (e.projectPath as string) || workDir,
-            // Heuristic: sessions with a firstPrompt and messageCount >= 2 likely have conversation
             hasConversation: !!((e.firstPrompt as string)?.trim()) && ((e.messageCount as number) || 0) >= 2,
-          }))
-          .sort(
-            (a: ClaudeCodeSession, b: ClaudeCodeSession) =>
-              new Date(b.modified).getTime() - new Date(a.modified).getTime(),
-          )
-          .slice(0, 50);
+          });
+        }
       }
     } catch {
       // Fall through to JSONL scan
     }
   }
 
-  // Fallback: scan JSONL files
-  const sessions: ClaudeCodeSession[] = [];
+  // Also scan JSONL files to catch sessions not in the (possibly stale) index
   try {
     const files = fs
       .readdirSync(projectDir)
@@ -84,6 +80,8 @@ export function scanClaudeCodeSessions(workDir: string): ClaudeCodeSession[] {
 
     for (const { name, stats } of files) {
       const sessionId = name.replace(".jsonl", "");
+      if (indexSessions.has(sessionId)) continue; // Already have from index
+
       let firstPrompt = "";
       let gitBranch: string | undefined;
       const created = stats.birthtime.toISOString();
@@ -122,7 +120,7 @@ export function scanClaudeCodeSessions(workDir: string): ClaudeCodeSession[] {
         // Skip unreadable files
       }
 
-      sessions.push({
+      indexSessions.set(sessionId, {
         sessionId,
         firstPrompt,
         messageCount: 0,
@@ -137,7 +135,9 @@ export function scanClaudeCodeSessions(workDir: string): ClaudeCodeSession[] {
     // Directory read failed
   }
 
-  return sessions;
+  return Array.from(indexSessions.values())
+    .sort((a, b) => new Date(b.modified).getTime() - new Date(a.modified).getTime())
+    .slice(0, 50);
 }
 
 /**
@@ -172,11 +172,13 @@ export function scanAllProjects(): ProjectSummary[] {
     for (const dir of dirs) {
       const dirPath = path.join(projectsRoot, dir.name);
       try {
-        // Count JSONL session files
-        const files = fs.readdirSync(dirPath)
-          .filter(f => f.endsWith(".jsonl"));
+        // Count sessions: both .jsonl files and UUID directories (newer Claude Code format)
+        const entries = fs.readdirSync(dirPath, { withFileTypes: true });
+        const jsonlCount = entries.filter(e => e.isFile() && e.name.endsWith(".jsonl")).length;
+        const uuidDirCount = entries.filter(e => e.isDirectory() && /^[0-9a-f]{8}-/.test(e.name)).length;
+        const sessionCount = jsonlCount + uuidDirCount;
 
-        if (files.length === 0) continue; // Skip projects with no sessions
+        if (sessionCount === 0) continue; // Skip projects with no sessions
 
         // Get latest mtime cheaply: check sessions-index.json or directory mtime
         // (avoids stat-ing every JSONL file — can be 1000+ files)
@@ -199,7 +201,7 @@ export function scanAllProjects(): ProjectSummary[] {
         projects.push({
           projectPath: decoded,
           dirName: dir.name,
-          sessionCount: files.length,
+          sessionCount,
           lastModified: latestMtime ? new Date(latestMtime).toISOString() : "",
         });
       } catch { /* skip unreadable dirs */ }
