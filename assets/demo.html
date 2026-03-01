@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: #000; font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', monospace; overflow: hidden; }
+
+:root {
+  --bg: #000000; --bg2: #0a0a0a; --bg3: #111111;
+  --text: #d4d4d4; --dim: #666; --muted: #444;
+  --green: #00ff00; --green-dim: #00aa00;
+  --blue: #569cd6; --cyan: #4ec9b0; --orange: #ce9178;
+}
+
+.container { display: flex; height: 100vh; width: 100vw; }
+
+/* Sidebar */
+.sidebar { width: 220px; background: var(--bg2); border-right: 1px solid #1a1a1a; display: flex; flex-direction: column; padding: 0; }
+.sidebar-header { padding: 14px 12px 8px; font-size: 10px; text-transform: uppercase; letter-spacing: 1.5px; color: var(--muted); font-weight: 600; }
+.agent-item { padding: 10px 12px; border-radius: 6px; margin: 2px 6px; background: var(--bg3); border: 1px solid #333; }
+.agent-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); box-shadow: 0 0 4px var(--green); display: inline-block; margin-right: 8px; }
+.agent-name { font-size: 13px; color: var(--text); }
+.agent-path { font-size: 11px; color: var(--dim); margin-top: 3px; padding-left: 14px; }
+.browse-btn { display: block; width: calc(100% - 16px); margin: auto 8px 8px; padding: 8px; background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.2); border-radius: 6px; color: var(--dim); font-size: 11px; text-align: center; font-family: inherit; cursor: pointer; }
+
+/* Main */
+.main { flex: 1; display: flex; flex-direction: column; }
+
+/* Header */
+.header { height: 44px; background: var(--bg2); border-bottom: 1px solid #1a1a1a; display: flex; align-items: center; padding: 0 16px; gap: 12px; }
+.status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); box-shadow: 0 0 6px var(--green); }
+.status-text { font-size: 12px; color: var(--green); }
+.header-title { font-size: 12px; color: var(--dim); margin-left: auto; }
+
+/* Chat */
+.chat { flex: 1; padding: 20px 24px; overflow-y: auto; display: flex; flex-direction: column; gap: 16px; }
+
+.msg { max-width: 85%; }
+.msg.user { align-self: flex-end; }
+.msg.assistant { align-self: flex-start; }
+
+.msg-label { font-size: 10px; color: var(--muted); margin-bottom: 4px; text-transform: uppercase; letter-spacing: 1px; }
+.msg.user .msg-label { text-align: right; }
+
+.msg-body { padding: 12px 16px; border-radius: 8px; font-size: 13px; line-height: 1.6; color: var(--text); }
+.msg.user .msg-body { background: rgba(0, 255, 0, 0.08); border: 1px solid rgba(0, 255, 0, 0.15); }
+.msg.assistant .msg-body { background: var(--bg3); border: 1px solid #222; }
+
+.msg-body code { background: rgba(255,255,255,0.08); padding: 2px 6px; border-radius: 3px; font-size: 12px; }
+.msg-body pre { background: #0d0d0d; padding: 12px; border-radius: 6px; margin: 8px 0; overflow-x: auto; font-size: 12px; border: 1px solid #1a1a1a; }
+
+/* Tool status */
+.tool-status { display: flex; align-items: center; gap: 8px; padding: 6px 12px; background: rgba(86,156,214,0.08); border: 1px solid rgba(86,156,214,0.15); border-radius: 6px; font-size: 11px; color: var(--blue); }
+.tool-spinner { width: 12px; height: 12px; border: 2px solid var(--blue); border-top-color: transparent; border-radius: 50%; animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.tool-done { color: var(--cyan); }
+.tool-check { color: var(--cyan); }
+
+/* Cost */
+.cost-bar { font-size: 10px; color: var(--muted); margin-top: 4px; }
+
+/* Input */
+.input-area { padding: 12px 16px; border-top: 1px solid #1a1a1a; background: var(--bg2); display: flex; gap: 8px; align-items: center; }
+.input-field { flex: 1; background: var(--bg); border: 1px solid #333; border-radius: 6px; padding: 10px 14px; color: var(--text); font-size: 13px; font-family: inherit; outline: none; }
+.send-btn { background: var(--green); color: #000; border: none; border-radius: 6px; padding: 10px 16px; font-size: 12px; font-weight: 600; cursor: pointer; font-family: inherit; }
+
+/* Cursor blink */
+.cursor { display: inline-block; width: 2px; height: 14px; background: var(--green); animation: blink 0.8s infinite; vertical-align: middle; margin-left: 1px; }
+@keyframes blink { 0%,50% { opacity: 1; } 51%,100% { opacity: 0; } }
+
+/* Streaming effect */
+.streaming .msg-body { border-color: rgba(0,255,0,0.2); }
+
+/* Scene transitions */
+.scene-label { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 20px; color: var(--text); text-align: center; z-index: 100; opacity: 0; transition: opacity 0.4s; pointer-events: none; background: rgba(0,0,0,0.85); padding: 20px 40px; border-radius: 12px; border: 1px solid #333; }
+.scene-label.show { opacity: 1; }
+.scene-label small { display: block; font-size: 13px; color: var(--dim); margin-top: 6px; }
+
+/* Phone frame */
+.phone-frame { display: none; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 375px; height: 720px; border: 3px solid #333; border-radius: 40px; overflow: hidden; background: #000; box-shadow: 0 0 60px rgba(0,255,0,0.1); }
+.phone-frame .container { flex-direction: column; height: 100%; }
+.phone-frame .sidebar { display: none; }
+.phone-notch { height: 34px; background: #000; display: flex; align-items: center; justify-content: center; }
+.phone-notch-bar { width: 80px; height: 4px; background: #333; border-radius: 2px; }
+
+/* Browse modal */
+.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 50; display: none; align-items: center; justify-content: center; }
+.modal { width: 440px; max-height: 500px; background: #0d0d0d; border: 1px solid #333; border-radius: 12px; overflow: hidden; }
+.modal-header { padding: 14px 16px; border-bottom: 1px solid #222; font-size: 14px; color: var(--text); display: flex; justify-content: space-between; }
+.modal-close { color: var(--muted); cursor: pointer; font-size: 18px; }
+.project-item { padding: 12px 16px; border-bottom: 1px solid #1a1a1a; cursor: pointer; transition: background 0.15s; }
+.project-item:hover { background: var(--bg3); }
+.project-path { font-size: 13px; color: var(--text); }
+.project-meta { font-size: 11px; color: var(--muted); margin-top: 3px; }
+
+/* Fade in animation */
+.fade-in { animation: fadeIn 0.3s ease; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+/* Hide initially */
+.hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<div class="scene-label" id="sceneLabel"></div>
+
+<!-- Desktop View -->
+<div class="container" id="desktopView">
+  <div class="sidebar">
+    <div class="sidebar-header">Agents</div>
+    <div class="agent-item">
+      <div><span class="agent-dot"></span><span class="agent-name">gpu-server-01</span></div>
+      <div class="agent-path">~/projects/my-saas-app</div>
+    </div>
+    <div style="flex:1"></div>
+    <div class="browse-btn">Browse all projects...</div>
+  </div>
+  <div class="main">
+    <div class="header">
+      <div class="status-dot"></div>
+      <span class="status-text">agent online</span>
+      <span class="header-title">vibecheck &middot; gpu-server-01</span>
+    </div>
+    <div class="chat" id="chat"></div>
+    <div class="input-area">
+      <input class="input-field" id="inputField" placeholder="Message Claude..." readonly>
+      <button class="send-btn">Send</button>
+    </div>
+  </div>
+</div>
+
+<!-- Phone View -->
+<div class="phone-frame" id="phoneView">
+  <div class="phone-notch"><div class="phone-notch-bar"></div></div>
+  <div class="container" style="flex-direction:column">
+    <div class="main" style="height:100%">
+      <div class="header">
+        <div class="status-dot"></div>
+        <span class="status-text">agent online</span>
+      </div>
+      <div class="chat" id="phoneChat"></div>
+      <div class="input-area">
+        <input class="input-field" placeholder="Message Claude..." readonly style="font-size:14px">
+        <button class="send-btn">Send</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Browse Modal -->
+<div class="modal-overlay" id="browseModal">
+  <div class="modal">
+    <div class="modal-header">
+      <span>All Projects</span>
+      <span class="modal-close">&times;</span>
+    </div>
+    <div id="projectList">
+      <div class="project-item" style="background:var(--bg3)">
+        <div class="project-path">~/projects/my-saas-app</div>
+        <div class="project-meta">12 sessions &middot; 2m ago</div>
+      </div>
+      <div class="project-item">
+        <div class="project-path">~/projects/mobile-app</div>
+        <div class="project-meta">8 sessions &middot; 3h ago</div>
+      </div>
+      <div class="project-item">
+        <div class="project-path">~/research/ml-pipeline</div>
+        <div class="project-meta">5 sessions &middot; 1d ago</div>
+      </div>
+      <div class="project-item">
+        <div class="project-path">~/projects/landing-page</div>
+        <div class="project-meta">3 sessions &middot; 3d ago</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const chat = document.getElementById('chat');
+const phoneChat = document.getElementById('phoneChat');
+const input = document.getElementById('inputField');
+const sceneLabel = document.getElementById('sceneLabel');
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+function showScene(title, subtitle, duration = 1500) {
+  return new Promise(async resolve => {
+    sceneLabel.innerHTML = title + (subtitle ? '<small>' + subtitle + '</small>' : '');
+    sceneLabel.classList.add('show');
+    await sleep(duration);
+    sceneLabel.classList.remove('show');
+    await sleep(400);
+    resolve();
+  });
+}
+
+function addMsg(container, role, html, animate = true) {
+  const div = document.createElement('div');
+  div.className = 'msg ' + role + (animate ? ' fade-in' : '');
+  div.innerHTML = '<div class="msg-label">' + (role === 'user' ? 'You' : 'Claude') + '</div><div class="msg-body">' + html + '</div>';
+  container.appendChild(div);
+  container.scrollTop = container.scrollHeight;
+  return div;
+}
+
+function addTool(container, name, detail, done = false) {
+  const div = document.createElement('div');
+  div.className = 'tool-status fade-in';
+  if (done) {
+    div.innerHTML = '<span class="tool-check">&#10003;</span> <span class="tool-done">' + name + '</span> <span style="color:var(--muted)">' + detail + '</span>';
+  } else {
+    div.innerHTML = '<div class="tool-spinner"></div> ' + name + ' <span style="color:var(--muted)">' + detail + '</span>';
+  }
+  container.appendChild(div);
+  container.scrollTop = container.scrollHeight;
+  return div;
+}
+
+async function typeInput(text, speed = 50) {
+  input.value = '';
+  for (const ch of text) {
+    input.value += ch;
+    await sleep(speed);
+  }
+}
+
+async function streamText(container, role, fullText, speed = 15) {
+  const div = addMsg(container, role, '<span class="cursor"></span>');
+  div.classList.add('streaming');
+  const body = div.querySelector('.msg-body');
+  let displayed = '';
+  for (let i = 0; i < fullText.length; i++) {
+    displayed += fullText[i];
+    body.innerHTML = displayed + '<span class="cursor"></span>';
+    container.scrollTop = container.scrollHeight;
+    await sleep(speed);
+  }
+  body.innerHTML = displayed;
+  div.classList.remove('streaming');
+  return div;
+}
+
+function addCost(container, cost, tokens) {
+  const div = document.createElement('div');
+  div.className = 'cost-bar fade-in';
+  div.textContent = '$' + cost + ' · ' + tokens + ' tokens';
+  container.appendChild(div);
+}
+
+async function run() {
+  await sleep(800);
+
+  // === Scene 1: PC coding ===
+  await showScene('Scene 1', 'Desktop — Give coding instructions');
+
+  await typeInput('Refactor the auth module to use JWT tokens', 35);
+  await sleep(300);
+  input.value = '';
+  addMsg(chat, 'user', 'Refactor the auth module to use JWT tokens');
+  await sleep(400);
+
+  // Tool animations
+  const t1 = addTool(chat, 'Reading', 'src/auth/middleware.ts');
+  await sleep(800);
+  t1.innerHTML = '<span class="tool-check">&#10003;</span> <span class="tool-done">Read</span> <span style="color:var(--muted)">src/auth/middleware.ts</span>';
+  await sleep(300);
+
+  const t2 = addTool(chat, 'Reading', 'src/auth/session.ts');
+  await sleep(600);
+  t2.innerHTML = '<span class="tool-check">&#10003;</span> <span class="tool-done">Read</span> <span style="color:var(--muted)">src/auth/session.ts</span>';
+  await sleep(300);
+
+  const t3 = addTool(chat, 'Editing', 'src/auth/middleware.ts');
+  await sleep(1000);
+  t3.innerHTML = '<span class="tool-check">&#10003;</span> <span class="tool-done">Edit</span> <span style="color:var(--muted)">src/auth/middleware.ts</span>';
+  await sleep(300);
+
+  const t4 = addTool(chat, 'Running', 'npm test');
+  await sleep(1200);
+  t4.innerHTML = '<span class="tool-check">&#10003;</span> <span class="tool-done">Bash</span> <span style="color:var(--muted)">npm test — 14 passed</span>';
+  await sleep(400);
+
+  await streamText(chat, 'assistant',
+    "Done! I've refactored the auth module to use JWT:\n\n" +
+    "- Replaced session-based auth with JWT tokens\n" +
+    "- Added token refresh endpoint at /auth/refresh\n" +
+    "- All 14 tests passing\n\n" +
+    "The access token expires in 15 minutes, refresh token in 7 days.", 12);
+  addCost(chat, '0.042', '3,847');
+  await sleep(2000);
+
+  // === Scene 2: Phone continues ===
+  await showScene('Scene 2', 'Phone — Continue the same session');
+
+  document.getElementById('desktopView').style.display = 'none';
+  document.getElementById('phoneView').style.display = 'block';
+
+  // Show previous conversation on phone
+  addMsg(phoneChat, 'user', 'Refactor the auth module to use JWT tokens', false);
+  addMsg(phoneChat, 'assistant',
+    "Done! I've refactored the auth module to use JWT:\n\n" +
+    "- Replaced session-based auth with JWT tokens\n" +
+    "- Added token refresh endpoint\n" +
+    "- All 14 tests passing", false);
+
+  await sleep(1200);
+
+  // New message from phone
+  addMsg(phoneChat, 'user', 'Add rate limiting to the auth endpoints');
+  await sleep(500);
+
+  const pt1 = addTool(phoneChat, 'Reading', 'src/auth/routes.ts');
+  await sleep(700);
+  pt1.innerHTML = '<span class="tool-check">&#10003;</span> <span class="tool-done">Read</span> <span style="color:var(--muted)">src/auth/routes.ts</span>';
+  await sleep(300);
+
+  const pt2 = addTool(phoneChat, 'Editing', 'src/auth/routes.ts');
+  await sleep(900);
+  pt2.innerHTML = '<span class="tool-check">&#10003;</span> <span class="tool-done">Edit</span> <span style="color:var(--muted)">src/auth/routes.ts</span>';
+  await sleep(300);
+
+  await streamText(phoneChat, 'assistant',
+    "Added rate limiting:\n" +
+    "- /auth/login: 5 req/min\n" +
+    "- /auth/refresh: 10 req/min\n" +
+    "- Returns 429 with retry-after header", 18);
+  addCost(phoneChat, '0.028', '2,156');
+  await sleep(2000);
+
+  // === Scene 3: Browse All Projects ===
+  await showScene('Scene 3', 'Browse & switch between projects');
+
+  document.getElementById('phoneView').style.display = 'none';
+  document.getElementById('desktopView').style.display = 'flex';
+
+  // Clear chat for fresh look
+  chat.innerHTML = '';
+  addMsg(chat, 'user', 'Refactor the auth module to use JWT tokens', false);
+  addMsg(chat, 'assistant', "Done! I've refactored the auth module to use JWT. All 14 tests passing.", false);
+  addMsg(chat, 'user', 'Add rate limiting to the auth endpoints', false);
+  addMsg(chat, 'assistant', "Added rate limiting: /auth/login 5 req/min, /auth/refresh 10 req/min.", false);
+
+  await sleep(800);
+
+  // Open modal
+  document.getElementById('browseModal').style.display = 'flex';
+  await sleep(1500);
+
+  // Highlight a different project
+  const items = document.querySelectorAll('.project-item');
+  items[1].style.background = 'var(--bg3)';
+  items[0].style.background = 'none';
+  await sleep(800);
+
+  // Close modal, show new project
+  document.getElementById('browseModal').style.display = 'none';
+  document.querySelector('.agent-path').textContent = '~/projects/mobile-app';
+  chat.innerHTML = '';
+  addMsg(chat, 'user', 'Fix the login screen crash on Android 14', false);
+  addMsg(chat, 'assistant', "Found the issue — the biometric prompt API changed in Android 14. Updated BiometricAuth.kt to use the new callback.", false);
+  addMsg(chat, 'user', 'Run the tests', false);
+  addMsg(chat, 'assistant', "All 23 tests passing. The biometric flow works correctly on API 34+.", false);
+  await sleep(2500);
+
+  // === Scene 4: Session sync ===
+  await showScene('Scene 4', 'CLI sees the same conversation history');
+
+  document.getElementById('desktopView').style.display = 'none';
+
+  // Show terminal-like view
+  const termDiv = document.createElement('div');
+  termDiv.style.cssText = 'width:100vw;height:100vh;background:#0a0a0a;padding:24px 32px;font-family:inherit;overflow:hidden;';
+  termDiv.innerHTML = `
+    <div style="color:var(--dim);font-size:13px;margin-bottom:16px">$ claude --resume</div>
+    <div style="color:var(--muted);font-size:12px;margin-bottom:20px;border-bottom:1px solid #222;padding-bottom:12px">
+      Resuming session from ~/projects/my-saas-app<br>
+      Session: a76995f7 &middot; Last active: 2 minutes ago
+    </div>
+    <div style="color:var(--green);font-size:11px;margin-bottom:8px">You (from web)</div>
+    <div style="color:var(--text);font-size:13px;margin-bottom:16px">Refactor the auth module to use JWT tokens</div>
+    <div style="color:var(--blue);font-size:11px;margin-bottom:8px">Claude</div>
+    <div style="color:var(--text);font-size:13px;margin-bottom:16px">Done! I've refactored the auth module to use JWT.<br>All 14 tests passing.</div>
+    <div style="color:var(--green);font-size:11px;margin-bottom:8px">You (from phone)</div>
+    <div style="color:var(--text);font-size:13px;margin-bottom:16px">Add rate limiting to the auth endpoints</div>
+    <div style="color:var(--blue);font-size:11px;margin-bottom:8px">Claude</div>
+    <div style="color:var(--text);font-size:13px;margin-bottom:20px">Added rate limiting: /auth/login 5 req/min, /auth/refresh 10 req/min.</div>
+    <div style="border-top:1px solid #222;padding-top:12px;color:var(--cyan);font-size:12px">
+      &#10003; Web and CLI share the same session history
+    </div>
+  `;
+  document.body.appendChild(termDiv);
+  await sleep(3500);
+
+  // === End ===
+  termDiv.remove();
+  document.getElementById('desktopView').style.display = 'flex';
+  await showScene('VibeCheck', 'Run Claude Code on your server. Access from anywhere.\ngithub.com/NestozAI/VibeCheck', 3000);
+}
+
+run();
+</script>
+</body>
+</html>
