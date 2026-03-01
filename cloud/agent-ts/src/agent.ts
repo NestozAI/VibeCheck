@@ -286,7 +286,7 @@ export class VibeAgent {
         break;
 
       case "resume_session":
-        this.handleResumeSession(msg.session_id);
+        this.handleResumeSession(msg.session_id, msg.projectPath);
         break;
 
       case "discover_projects":
@@ -508,18 +508,25 @@ export class VibeAgent {
     console.log("[agent] Session sync request sent");
   }
 
-  private handleResumeSession(sessionId: string): void {
-    console.log(`[agent] Resuming session: ${sessionId.slice(0, 20)}...`);
-    this.claude.currentSessionIdOverride = sessionId;
-    saveSessionId(this.workDir, sessionId);
-    this.send({
-      type: "session_update",
-      work_dir: this.workDir,
-      session_id: sessionId,
-    });
+  private handleResumeSession(sessionId: string, projectPath?: string): void {
+    // Use provided projectPath for cross-project resume, fallback to agent's workDir
+    const historyPath = projectPath || this.workDir;
+    const isCrossProject = projectPath && projectPath !== this.workDir;
+    console.log(`[agent] Resuming session: ${sessionId.slice(0, 20)}... (project: ${historyPath}, cross: ${!!isCrossProject})`);
 
-    // Read and send conversation history from JSONL
-    const history = readSessionHistory(this.workDir, sessionId);
+    if (!isCrossProject) {
+      // Same project: full resume (set session ID so next query continues this session)
+      this.claude.currentSessionIdOverride = sessionId;
+      saveSessionId(this.workDir, sessionId);
+      this.send({
+        type: "session_update",
+        work_dir: this.workDir,
+        session_id: sessionId,
+      });
+    }
+
+    // Read and send conversation history from JSONL (using correct project path)
+    const history = readSessionHistory(historyPath, sessionId);
     console.log(`[agent] Session history: ${history.length} messages`);
 
     // Send history for the web UI to render
@@ -527,6 +534,7 @@ export class VibeAgent {
       type: "session_history",
       session_id: sessionId,
       history,
+      ...(isCrossProject ? { readOnly: true } : {}),
     });
   }
 

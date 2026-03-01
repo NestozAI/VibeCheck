@@ -230,6 +230,8 @@ export interface ScheduleListRequestMessage {
 export interface ResumeSessionMessage {
   type: "resume_session";
   session_id: string;
+  /** Project path for cross-project session resume (from Browse Projects) */
+  projectPath?: string;
 }
 
 /** Server → Agent: request list of all discoverable projects */
