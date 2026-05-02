@@ -169,6 +169,8 @@ export interface QueryMessage {
    * Keys are agent names; Claude can invoke them via the Task tool.
    */
   agents?: Record<string, AgentDef>;
+  /** Attached images from the web UI (base64-encoded). */
+  images?: Array<{ filename: string; data: string }>;
 }
 
 export interface ApprovalMessage {

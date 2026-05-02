@@ -205,6 +205,7 @@ export class VibeAgent {
           msg.skill_id,
           msg.system_prompt,
           msg.agents,
+          msg.images,
         );
         break;
 
@@ -306,6 +307,7 @@ export class VibeAgent {
     skillId?: string,
     systemPrompt?: string,
     agents?: Record<string, import("./protocol.js").AgentDef>,
+    images?: Array<{ filename: string; data: string }>,
   ): Promise<void> {
     if (this.processing) {
       this.send({
@@ -317,6 +319,22 @@ export class VibeAgent {
 
     this.processing = true;
     console.log(`[agent] Query received: ${message.slice(0, 80)}...`);
+
+    // Save attached images to temp files and append paths to message
+    let finalMessage = message;
+    const savedImagePaths: string[] = [];
+    if (images && images.length > 0) {
+      const tmpDir = path.join(os.tmpdir(), "vibecheck-images");
+      if (!fs.existsSync(tmpDir)) fs.mkdirSync(tmpDir, { recursive: true });
+      for (const img of images) {
+        const ext = img.filename?.split(".").pop() || "png";
+        const tmpPath = path.join(tmpDir, `${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`);
+        fs.writeFileSync(tmpPath, Buffer.from(img.data, "base64"));
+        savedImagePaths.push(tmpPath);
+      }
+      finalMessage += "\n\n[Attached images: " + savedImagePaths.join(", ") + "]";
+      console.log(`[agent] ${images.length} images saved to temp files`);
+    }
 
     try {
       // Before-images snapshot
@@ -330,7 +348,7 @@ export class VibeAgent {
       const skill = skillId ? getSkill(skillId) : undefined;
       if (skill) console.log(`[agent] Skill applied: ${skill.icon} ${skill.name}`);
       const execResult: ExecuteResult = await this.claude.execute(
-        message,
+        finalMessage,
         model,
         skill,
         systemPrompt,
@@ -411,6 +429,10 @@ export class VibeAgent {
       });
     } finally {
       this.processing = false;
+      // Clean up temp image files
+      for (const p of savedImagePaths) {
+        try { fs.unlinkSync(p); } catch { /* ignore */ }
+      }
       // Drain queued scheduled tasks (one at a time)
       void this.drainScheduledQueue();
     }
