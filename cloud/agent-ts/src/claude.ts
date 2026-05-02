@@ -248,15 +248,16 @@ export class ClaudeSession {
       // AbortError is handled solely by handleInterrupt
       if (error instanceof AbortError) throw error;
 
-      // Invalid session → retry with new session
+      // Invalid session → retry with new session (narrow match to avoid false resets)
       const errMsg = error instanceof Error ? error.message : String(error);
-      if (
+      const isSessionError =
         this.sessionId &&
-        (errMsg.toLowerCase().includes("session") ||
-          errMsg.toLowerCase().includes("not found") ||
-          errMsg.includes("exited with code"))
-      ) {
-        console.warn(`[claude] Session error: ${errMsg}. Retrying with new session...`);
+        (errMsg.includes("session not found") ||
+          errMsg.includes("invalid session") ||
+          errMsg.includes("Session not found") ||
+          errMsg.includes("no such session"));
+      if (isSessionError) {
+        console.warn(`[claude] Session not found: ${errMsg}. Retrying with new session...`);
         this.sessionId = null;
         this.sessionStarted = false;
         return this.execute(message, model, skill, systemPrompt, agents);
