@@ -288,7 +288,7 @@ export class VibeAgent {
         break;
 
       case "resume_session":
-        this.handleResumeSession(msg.session_id, msg.projectPath);
+        await this.handleResumeSession(msg.session_id, msg.projectPath);
         break;
 
       case "discover_projects":
@@ -531,11 +531,18 @@ export class VibeAgent {
     console.log("[agent] Session sync request sent");
   }
 
-  private handleResumeSession(sessionId: string, projectPath?: string): void {
+  private async handleResumeSession(sessionId: string, projectPath?: string): Promise<void> {
     // Use provided projectPath for cross-project resume, fallback to agent's workDir
     const historyPath = projectPath || this.workDir;
     const isCrossProject = projectPath && projectPath !== this.workDir;
     console.log(`[agent] Resuming session: ${sessionId.slice(0, 20)}... (project: ${historyPath}, cross: ${!!isCrossProject})`);
+
+    // If a task is currently running, interrupt it before switching
+    if (this.processing) {
+      console.log(`[agent] Interrupting current task for session switch...`);
+      await this.claude.interrupt();
+      this.processing = false;
+    }
 
     // Set session ID for resume (both same-project and cross-project)
     this.claude.currentSessionIdOverride = sessionId;
