@@ -312,7 +312,7 @@ export class VibeAgent {
     if (this.processing) {
       this.send({
         type: "response",
-        result: "A previous task is still running. Please wait.",
+        result: "⏳ Previous task still running. Your message has been queued and will run automatically when it finishes.",
       });
       return;
     }
