@@ -3,7 +3,7 @@
 import { Command } from "commander";
 import path from "node:path";
 import { VibeAgent } from "./agent.js";
-import { DEFAULT_SERVER, RECONNECT_DELAY_MS } from "./config.js";
+import { DEFAULT_SERVER, RECONNECT_DELAY_MS, MAX_RECONNECT_DELAY_MS, MAX_CONSECUTIVE_FAILURES } from "./config.js";
 import { checkForUpdates } from "./updater.js";
 
 const program = new Command()
@@ -47,9 +47,12 @@ async function main(): Promise<void> {
     return;
   }
 
+  let consecutiveFailures = 0;
+
   while (true) {
     try {
       await agent.connect();
+      consecutiveFailures = 0; // Reset on successful connection
     } catch (error) {
       if (
         error instanceof Error &&
@@ -59,9 +62,16 @@ async function main(): Promise<void> {
         console.log("\n[agent] Shutting down.");
         process.exit(0);
       }
+      consecutiveFailures++;
       console.error(
-        `[agent] Connection failed: ${error instanceof Error ? error.message : error}`,
+        `[agent] Connection failed (${consecutiveFailures}/${MAX_CONSECUTIVE_FAILURES}): ${error instanceof Error ? error.message : error}`,
       );
+
+      // Too many consecutive failures — exit and let systemd restart us
+      if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+        console.error(`[agent] ${MAX_CONSECUTIVE_FAILURES} consecutive failures. Exiting for clean restart.`);
+        process.exit(1);
+      }
     }
     // Check for updates on each reconnect
     const reconnectUpdated = await checkForUpdates();
@@ -75,10 +85,12 @@ async function main(): Promise<void> {
       child.on("exit", (code) => process.exit(code ?? 0));
       return;
     }
+    // Exponential backoff: 5s → 10s → 20s → 40s → 60s (cap)
+    const delay = Math.min(RECONNECT_DELAY_MS * Math.pow(2, consecutiveFailures - 1), MAX_RECONNECT_DELAY_MS);
     console.log(
-      `[agent] Reconnecting in ${RECONNECT_DELAY_MS / 1000}s...`,
+      `[agent] Reconnecting in ${(delay / 1000).toFixed(0)}s...`,
     );
-    await new Promise((r) => setTimeout(r, RECONNECT_DELAY_MS));
+    await new Promise((r) => setTimeout(r, delay));
   }
 }
 

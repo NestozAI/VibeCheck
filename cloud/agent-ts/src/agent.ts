@@ -1,6 +1,7 @@
 import WebSocket from "ws";
 import path from "node:path";
 import os from "node:os";
+import fs from "node:fs";
 import type { SDKSystemMessage } from "@anthropic-ai/claude-agent-sdk";
 import { ClaudeSession, AbortError } from "./claude.js";
 import type { ExecuteResult } from "./claude.js";
@@ -518,6 +519,12 @@ export class VibeAgent {
     this.claude.currentSessionIdOverride = sessionId;
 
     if (isCrossProject) {
+      // Verify directory exists before switching cwd
+      if (!fs.existsSync(projectPath)) {
+        console.warn(`[agent] Project path does not exist: ${projectPath}, staying in ${this.workDir}`);
+        this.send({ type: "response", result: `Error: Project path not found: ${projectPath}` });
+        return;
+      }
       // Switch Claude SDK cwd to the target project
       this.claude.cwdOverride = projectPath;
       console.log(`[agent] Switched cwd to: ${projectPath}`);

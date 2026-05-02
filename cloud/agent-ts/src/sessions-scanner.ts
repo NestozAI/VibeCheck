@@ -29,6 +29,53 @@ function encodeProjectPath(projectPath: string): string {
 }
 
 /**
+ * Decode an encoded project directory name back to a real filesystem path.
+ * Claude Code encodes paths by replacing /,_,space with -, which is lossy.
+ * e.g. "-disk1-projects-contents-blog" could be:
+ *   /disk1/projects/contents/blog  OR  /disk1/projects/contents-blog
+ *
+ * Strategy: try naive decode first, if it doesn't exist on disk,
+ * try keeping consecutive segments joined with dashes.
+ */
+function decodeProjectDir(dirName: string): string {
+  // Naive decode: all dashes → slashes
+  const naive = dirName.startsWith("-")
+    ? dirName.replace(/-/g, "/")
+    : "/" + dirName.replace(/-/g, "/");
+
+  if (fs.existsSync(naive)) return naive;
+
+  // Try to find the real path by testing segment combinations.
+  // Split into parts, then try joining adjacent parts with dashes.
+  const parts = dirName.replace(/^-/, "").split("-");
+  // Build path greedily from left: take as many dash-joined segments as possible
+  // that form an existing directory prefix.
+  let current = "";
+  let i = 0;
+  while (i < parts.length) {
+    // Try longest match first: join parts[i..j] with dashes
+    let found = false;
+    for (let j = parts.length; j > i; j--) {
+      const segment = parts.slice(i, j).join("-");
+      const candidate = current + "/" + segment;
+      if (fs.existsSync(candidate)) {
+        current = candidate;
+        i = j;
+        found = true;
+        break;
+      }
+    }
+    if (!found) {
+      // No existing path found, fall back to single segment with slash
+      current += "/" + parts[i];
+      i++;
+    }
+  }
+
+  return current || naive;
+}
+
+/**
  * Scan Claude Code sessions for the given workDir.
  * Fast path: reads sessions-index.json if available.
  * Fallback: scans JSONL files and reads first few lines for metadata.
@@ -136,6 +183,7 @@ export function scanClaudeCodeSessions(workDir: string): ClaudeCodeSession[] {
   }
 
   return Array.from(indexSessions.values())
+    .filter((s) => s.hasConversation)
     .sort((a, b) => new Date(b.modified).getTime() - new Date(a.modified).getTime())
     .slice(0, 50);
 }
@@ -203,11 +251,11 @@ export function scanAllProjects(): ProjectSummary[] {
           }
         } catch { /* fallback: 0 */ }
 
-        // Best-effort decode: replace leading dash + internal dashes back to /
-        // e.g. "-disk1-projects-blog" → "/disk1/projects/blog"
-        const decoded = dir.name.startsWith("-")
-          ? dir.name.replace(/-/g, "/")
-          : "/" + dir.name.replace(/-/g, "/");
+        // Decode directory name back to project path.
+        // Claude Code encodes paths by replacing /,_,space with -.
+        // This is lossy (e.g. "contents-blog" vs "contents/blog"),
+        // so we try all possible splits and pick the first that exists on disk.
+        const decoded = decodeProjectDir(dir.name);
 
         projects.push({
           projectPath: decoded,
