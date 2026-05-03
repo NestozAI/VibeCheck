@@ -43,6 +43,7 @@ export class ClaudeSession {
   private sessionStarted = false;
   private workDir: string;
   private security: SecurityManager;
+  private _lastBlockType: string | null = null;
 
   /** Called when a new session ID is obtained from SDK */
   onSessionId?: (sessionId: string) => void;
@@ -148,6 +149,7 @@ export class ClaudeSession {
     // Maps tool_use id → tool name for correct end-event names
     const toolUseIdMap = new Map<string, string>();
     let chunkIndex = 0;
+    this._lastBlockType = null;
 
     try {
       this.currentQuery = query({ prompt: message, options });
@@ -169,6 +171,28 @@ export class ClaudeSession {
           case "stream_event": {
             const partial = msg as SDKPartialAssistantMessage;
             const event = partial.event as any;
+
+            // Extended thinking started
+            if (
+              event?.type === "content_block_start" &&
+              event?.content_block?.type === "thinking"
+            ) {
+              this.onToolStatus?.("thinking", "start", "Claude is reasoning...");
+            }
+
+            // Extended thinking ended (content_block_stop after thinking)
+            if (
+              event?.type === "content_block_stop" &&
+              this._lastBlockType === "thinking"
+            ) {
+              this.onToolStatus?.("thinking", "end");
+            }
+
+            // Track current block type
+            if (event?.type === "content_block_start") {
+              this._lastBlockType = event?.content_block?.type ?? null;
+            }
+
             // content_block_delta carries text deltas
             if (
               event?.type === "content_block_delta" &&
