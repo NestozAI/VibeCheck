@@ -45,28 +45,45 @@ function decodeProjectDir(dirName: string): string {
 
   if (fs.existsSync(naive)) return naive;
 
-  // Try to find the real path by testing segment combinations.
-  // Split into parts, then try joining adjacent parts with dashes.
+  // Claude Code encodes /, _, and space all as "-", so decoding is ambiguous.
+  // For each multi-part segment we try every combination of separators
+  // (-, _, space) between the parts and pick the first that exists on disk.
   const parts = dirName.replace(/^-/, "").split("-");
-  // Build path greedily from left: take as many dash-joined segments as possible
-  // that form an existing directory prefix.
+
+  // Generate all separator variations for segments parts[i..j]
+  // e.g. ["amber", "demo"] → ["amber-demo", "amber_demo", "amber demo"]
+  const segmentVariations = (segs: string[]): string[] => {
+    if (segs.length === 1) return [segs[0]];
+    const seps = ["-", "_", " "];
+    const out: string[] = [];
+    const recur = (idx: number, cur: string) => {
+      if (idx === segs.length) { out.push(cur); return; }
+      for (const sep of seps) recur(idx + 1, cur + sep + segs[idx]);
+    };
+    recur(1, segs[0]);
+    return out;
+  };
+
+  // Greedy: from each position i, try longest match first (j..i+1).
+  // For each candidate length, try all separator variations.
   let current = "";
   let i = 0;
   while (i < parts.length) {
-    // Try longest match first: join parts[i..j] with dashes
     let found = false;
     for (let j = parts.length; j > i; j--) {
-      const segment = parts.slice(i, j).join("-");
-      const candidate = current + "/" + segment;
-      if (fs.existsSync(candidate)) {
-        current = candidate;
-        i = j;
-        found = true;
-        break;
+      const variations = segmentVariations(parts.slice(i, j));
+      for (const v of variations) {
+        const candidate = current + "/" + v;
+        if (fs.existsSync(candidate)) {
+          current = candidate;
+          i = j;
+          found = true;
+          break;
+        }
       }
+      if (found) break;
     }
     if (!found) {
-      // No existing path found, fall back to single segment with slash
       current += "/" + parts[i];
       i++;
     }
