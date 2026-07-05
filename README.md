@@ -32,14 +32,15 @@ Start a conversation on your PC, resume it from your phone. Browse all your Clau
 
 ### Cloud (Easiest)
 
-1. Visit [vibecheck.sotaaz.com](https://vibecheck.sotaaz.com) and sign in
-2. Run the install command on your server:
+1. Visit [vibecheck.sotaaz.com](https://vibecheck.sotaaz.com) and sign in with email
+2. Go to [Dashboard](https://vibecheck.sotaaz.com/dashboard) — your API key and install command are shown there
+3. Copy and run the install command on your server:
 
 ```bash
 curl -sL https://vibecheck.sotaaz.com/install/YOUR_API_KEY | bash
 ```
 
-3. Open Chat and start coding.
+4. Open [Chat](https://vibecheck.sotaaz.com/chat) and start coding.
 
 ### Self-Hosted (Free)
 

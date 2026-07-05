@@ -32,14 +32,15 @@ PC에서 시작한 대화를 폰에서 이어갈 수 있습니다. 모든 Claude
 
 ### 클라우드 (가장 간편)
 
-1. [vibecheck.sotaaz.com](https://vibecheck.sotaaz.com)에서 로그인
-2. 서버에서 설치 명령어 실행:
+1. [vibecheck.sotaaz.com](https://vibecheck.sotaaz.com)에서 이메일로 로그인
+2. [Dashboard](https://vibecheck.sotaaz.com/dashboard)에서 API 키와 설치 명령어 확인
+3. 서버에서 설치 명령어 복사 & 실행:
 
 ```bash
 curl -sL https://vibecheck.sotaaz.com/install/YOUR_API_KEY | bash
 ```
 
-3. Chat 페이지를 열고 코딩 시작.
+4. [Chat](https://vibecheck.sotaaz.com/chat) 페이지를 열고 코딩 시작.
 
 ### 셀프 호스팅 (무료)
 
