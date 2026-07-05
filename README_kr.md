@@ -211,6 +211,15 @@ sudo chmod 440 /etc/sudoers.d/vibecheck
 
 `<사용자이름>` 부분을 본인의 Linux 사용자명으로 바꿔주세요.
 
+### Health Check Cron (권장)
+
+에이전트가 죽으면 자동으로 재시작합니다. [비밀번호 없이 재시작](#비밀번호-없이-재시작-권장) 설정이 필요합니다.
+
+```bash
+# crontab에 추가 (2분마다 체크)
+(crontab -l 2>/dev/null; echo "*/2 * * * * /path/to/VibeCheck/scripts/health-check.sh >> /tmp/vibecheck-health.log 2>&1") | crontab -
+```
+
 ### 자동 복구
 
 에이전트는 다음과 같은 자동 복구 기능을 내장하고 있습니다:

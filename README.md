@@ -211,6 +211,15 @@ sudo chmod 440 /etc/sudoers.d/vibecheck
 
 Replace `<YOUR_USERNAME>` with your Linux username.
 
+### Health Check Cron (Recommended)
+
+Automatically restart the agent if it crashes. Requires [passwordless sudo](#passwordless-restart-recommended).
+
+```bash
+# Add to crontab (checks every 2 minutes)
+(crontab -l 2>/dev/null; echo "*/2 * * * * /path/to/VibeCheck/scripts/health-check.sh >> /tmp/vibecheck-health.log 2>&1") | crontab -
+```
+
 ### Auto-Recovery
 
 The agent includes built-in resilience:
