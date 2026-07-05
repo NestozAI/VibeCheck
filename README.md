@@ -115,15 +115,27 @@ Session history is stored in `~/.claude/projects/` as `.jsonl` files — the sam
 
 ## vs Alternatives
 
-| | **VibeCheck** | **Happy Coder** | **Raw SSH** |
-|---|---|---|---|
-| Claude runs on | **Server** (headless, 24/7) | Your PC (must stay on) | Your PC |
-| Access from | Any browser | Mobile app only | Terminal only |
-| PC can be off? | **Yes** | No | No |
-| Install | `npm i -g` + one command | `npm i -g` + run wrapper | N/A |
-| Session sharing | Web + CLI share `.jsonl` | Mobile controls PC session | N/A |
-| Open source | MIT | MIT | N/A |
-| App required | No (web browser) | Yes (iOS/Android app) | No |
+| | **VibeCheck** | **Remote Control** (Official) | **Happy Coder** | **Raw SSH** |
+|---|---|---|---|---|
+| Claude runs on | **Server** (headless, 24/7) | Your PC (terminal open) | Your PC (must stay on) | Your PC |
+| Access from | Any browser | claude.ai/code or mobile app | Mobile app only | Terminal only |
+| PC can be off? | **Yes** | No (terminal must stay open) | No | No |
+| Session persists | **Yes** (systemd service) | No (closes with terminal) | No | No |
+| Session browsing | **All projects & sessions** | Current session only | Current session only | N/A |
+| Project switching | **Yes** (web UI) | No | No | N/A |
+| Auto-recovery | **Yes** (watchdog + cron) | No | No | N/A |
+| Plan required | Any (API key) | Pro/Max ($20-100+/mo) | Any | Any |
+| Install | `npm i -g` + one command | Built-in | `npm i -g` + run wrapper | N/A |
+| Open source | MIT | N/A | MIT | N/A |
+
+### VibeCheck vs Claude Remote Control
+
+Claude Code has a built-in `/remote-control` command that lets you access a session from your phone via claude.ai/code. However:
+
+- **Terminal must stay open** — Close the terminal, lose the session. VibeCheck runs as a systemd service that survives reboots.
+- **Single session only** — Remote Control mirrors one active session. VibeCheck lets you browse all projects and sessions, switch between them freely.
+- **No auto-recovery** — If the connection drops, you need to SSH back in and restart. VibeCheck has a built-in watchdog and health check cron for automatic recovery.
+- **Requires Pro/Max plan** — Remote Control needs a claude.ai subscription ($20-100+/mo). VibeCheck works with any Anthropic API key.
 
 ---
 

@@ -115,15 +115,27 @@ vibecheck-agent --key YOUR_API_KEY --dir /path/to/project
 
 ## 대안 비교
 
-| | **VibeCheck** | **Happy Coder** | **SSH** |
-|---|---|---|---|
-| Claude 실행 위치 | **서버** (headless, 24/7) | 내 PC (켜져 있어야 함) | 내 PC |
-| 접속 방법 | 아무 브라우저 | 모바일 앱 전용 | 터미널 전용 |
-| PC 꺼도 작동? | **가능** | 불가 | 불가 |
-| 설치 | `npm i -g` + 한 줄 명령 | `npm i -g` + 래퍼 실행 | 해당 없음 |
-| 세션 공유 | 웹 + CLI가 `.jsonl` 공유 | 모바일이 PC 세션 제어 | 해당 없음 |
-| 오픈소스 | MIT | MIT | 해당 없음 |
-| 앱 필요? | 불필요 (웹 브라우저) | 필요 (iOS/Android) | 불필요 |
+| | **VibeCheck** | **Remote Control** (공식) | **Happy Coder** | **SSH** |
+|---|---|---|---|---|
+| Claude 실행 위치 | **서버** (headless, 24/7) | 내 PC (터미널 열어놔야 함) | 내 PC (켜져 있어야 함) | 내 PC |
+| 접속 방법 | 아무 브라우저 | claude.ai/code 또는 모바일 앱 | 모바일 앱 전용 | 터미널 전용 |
+| PC 꺼도 작동? | **가능** | 불가 (터미널 닫으면 끝) | 불가 | 불가 |
+| 세션 유지 | **가능** (systemd 서비스) | 불가 (터미널과 함께 종료) | 불가 | 불가 |
+| 세션 브라우징 | **전체 프로젝트 & 세션** | 현재 세션만 | 현재 세션만 | 해당 없음 |
+| 프로젝트 전환 | **가능** (웹 UI) | 불가 | 불가 | 해당 없음 |
+| 자동 복구 | **가능** (워치독 + cron) | 불가 | 불가 | 해당 없음 |
+| 필요 플랜 | 아무거나 (API 키) | Pro/Max ($20-100+/월) | 아무거나 | 아무거나 |
+| 설치 | `npm i -g` + 한 줄 명령 | 내장 기능 | `npm i -g` + 래퍼 실행 | 해당 없음 |
+| 오픈소스 | MIT | 해당 없음 | MIT | 해당 없음 |
+
+### VibeCheck vs Claude Remote Control
+
+Claude Code에는 `/remote-control` 명령으로 claude.ai/code에서 세션에 접속하는 기능이 내장되어 있습니다. 하지만:
+
+- **터미널을 열어놔야 함** — 터미널을 닫으면 세션도 종료됩니다. VibeCheck은 systemd 서비스로 재부팅에도 유지됩니다.
+- **현재 세션만 가능** — Remote Control은 하나의 활성 세션만 미러링합니다. VibeCheck은 모든 프로젝트와 세션을 탐색하고 자유롭게 전환할 수 있습니다.
+- **자동 복구 없음** — 연결이 끊기면 다시 SSH로 접속해서 재시작해야 합니다. VibeCheck은 워치독과 health check cron으로 자동 복구됩니다.
+- **Pro/Max 플랜 필요** — Remote Control은 claude.ai 구독($20-100+/월)이 필요합니다. VibeCheck은 Anthropic API 키만 있으면 됩니다.
 
 ---
 
