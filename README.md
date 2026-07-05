@@ -177,6 +177,51 @@ VibeCheck/
 
 ---
 
+## Agent Management
+
+### Check Status
+
+```bash
+sudo systemctl status vibecheck-agent
+```
+
+### Restart Agent
+
+```bash
+sudo systemctl restart vibecheck-agent.service
+```
+
+### View Logs
+
+```bash
+journalctl -u vibecheck-agent -f
+```
+
+### Passwordless Restart (Recommended)
+
+By default, `systemctl` requires a password. To allow restarting without a password (useful for automation), create a sudoers rule:
+
+```bash
+echo '<YOUR_USERNAME> ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart vibecheck-agent.service
+<YOUR_USERNAME> ALL=(ALL) NOPASSWD: /usr/bin/systemctl status vibecheck-agent.service
+<YOUR_USERNAME> ALL=(ALL) NOPASSWD: /usr/bin/systemctl stop vibecheck-agent.service
+<YOUR_USERNAME> ALL=(ALL) NOPASSWD: /usr/bin/systemctl start vibecheck-agent.service' | sudo tee /etc/sudoers.d/vibecheck
+sudo chmod 440 /etc/sudoers.d/vibecheck
+```
+
+Replace `<YOUR_USERNAME>` with your Linux username.
+
+### Auto-Recovery
+
+The agent includes built-in resilience:
+- **Auto-reconnect** with exponential backoff if the server connection drops
+- **Watchdog timer** — if the agent can't reconnect within 5 minutes, it exits and systemd automatically restarts it
+- **Max failure exit** — after 30 consecutive connection failures, the agent exits for a clean restart
+
+As long as `Restart=always` is set in the systemd service file (which the installer configures by default), the agent will recover from any failure automatically.
+
+---
+
 ## Troubleshooting
 
 **Agent not connecting?**
@@ -185,8 +230,13 @@ VibeCheck/
 - Check firewall rules (WebSocket port must be open)
 
 **No responses?**
-- Confirm the agent process is running (`systemctl status vibecheck-agent`)
+- Confirm the agent process is running (`sudo systemctl status vibecheck-agent`)
 - Check agent logs: `journalctl -u vibecheck-agent -f`
+
+**Agent shows offline after running for a while?**
+- The agent has a built-in watchdog that should auto-recover within 5 minutes
+- If still offline: `sudo systemctl restart vibecheck-agent.service`
+- Set up [passwordless restart](#passwordless-restart-recommended) so you don't need to enter a password each time
 
 ---
 

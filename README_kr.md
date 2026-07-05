@@ -177,6 +177,51 @@ VibeCheck/
 
 ---
 
+## 에이전트 관리
+
+### 상태 확인
+
+```bash
+sudo systemctl status vibecheck-agent
+```
+
+### 재시작
+
+```bash
+sudo systemctl restart vibecheck-agent.service
+```
+
+### 로그 보기
+
+```bash
+journalctl -u vibecheck-agent -f
+```
+
+### 비밀번호 없이 재시작 (권장)
+
+`systemctl`은 기본적으로 비밀번호가 필요합니다. 비밀번호 없이 재시작하려면 sudoers 규칙을 추가하세요:
+
+```bash
+echo '<사용자이름> ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart vibecheck-agent.service
+<사용자이름> ALL=(ALL) NOPASSWD: /usr/bin/systemctl status vibecheck-agent.service
+<사용자이름> ALL=(ALL) NOPASSWD: /usr/bin/systemctl stop vibecheck-agent.service
+<사용자이름> ALL=(ALL) NOPASSWD: /usr/bin/systemctl start vibecheck-agent.service' | sudo tee /etc/sudoers.d/vibecheck
+sudo chmod 440 /etc/sudoers.d/vibecheck
+```
+
+`<사용자이름>` 부분을 본인의 Linux 사용자명으로 바꿔주세요.
+
+### 자동 복구
+
+에이전트는 다음과 같은 자동 복구 기능을 내장하고 있습니다:
+- **자동 재연결** — 서버 연결이 끊기면 지수 백오프로 재연결 시도
+- **워치독 타이머** — 5분간 재연결 실패 시 프로세스 종료 → systemd가 자동 재시작
+- **최대 실패 종료** — 30회 연속 연결 실패 시 프로세스 종료 → 클린 재시작
+
+설치 시 기본으로 `Restart=always`가 설정되므로, 어떤 장애에서든 자동으로 복구됩니다.
+
+---
+
 ## 문제 해결
 
 **에이전트가 연결되지 않나요?**
@@ -185,8 +230,13 @@ VibeCheck/
 - 방화벽 규칙 확인 (WebSocket 포트가 열려 있어야 함)
 
 **응답이 오지 않나요?**
-- 에이전트 프로세스가 실행 중인지 확인 (`systemctl status vibecheck-agent`)
+- 에이전트 프로세스가 실행 중인지 확인 (`sudo systemctl status vibecheck-agent`)
 - 에이전트 로그 확인: `journalctl -u vibecheck-agent -f`
+
+**에이전트가 한동안 오프라인으로 표시되나요?**
+- 워치독이 5분 이내에 자동 복구할 것입니다
+- 여전히 오프라인이면: `sudo systemctl restart vibecheck-agent.service`
+- [비밀번호 없이 재시작](#비밀번호-없이-재시작-권장) 설정을 하면 매번 비밀번호 입력 없이 재시작할 수 있습니다
 
 ---
 
