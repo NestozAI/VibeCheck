@@ -3,7 +3,7 @@
 import { Command } from "commander";
 import path from "node:path";
 import { VibeAgent } from "./agent.js";
-import { DEFAULT_SERVER, RECONNECT_DELAY_MS, MAX_RECONNECT_DELAY_MS, MAX_CONSECUTIVE_FAILURES } from "./config.js";
+import { DEFAULT_SERVER, RECONNECT_DELAY_MS, MAX_RECONNECT_DELAY_MS, MAX_CONSECUTIVE_FAILURES, WATCHDOG_TIMEOUT_MS } from "./config.js";
 import { checkForUpdates } from "./updater.js";
 
 const program = new Command()
@@ -49,10 +49,23 @@ async function main(): Promise<void> {
 
   let consecutiveFailures = 0;
 
+  // Watchdog: 5분간 서버 연결 성공이 없으면 프로세스 종료 → systemd 재시작
+  let watchdog: ReturnType<typeof setTimeout> | null = null;
+  const resetWatchdog = () => {
+    if (watchdog) clearTimeout(watchdog);
+    watchdog = setTimeout(() => {
+      console.error(`[agent] Watchdog: no connection for ${WATCHDOG_TIMEOUT_MS / 60000}min. Exiting for clean restart.`);
+      process.exit(1);
+    }, WATCHDOG_TIMEOUT_MS);
+    watchdog.unref(); // don't prevent exit
+  };
+  resetWatchdog();
+
   while (true) {
     try {
       await agent.connect();
       consecutiveFailures = 0; // Reset on successful connection
+      resetWatchdog(); // 연결 성공 시 watchdog 리셋
     } catch (error) {
       if (
         error instanceof Error &&

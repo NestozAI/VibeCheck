@@ -7,6 +7,7 @@ export const PING_INTERVAL_MS = 10_000;
 export const RECONNECT_DELAY_MS = 5_000;
 export const MAX_RECONNECT_DELAY_MS = 60_000;
 export const MAX_CONSECUTIVE_FAILURES = 30;
+export const WATCHDOG_TIMEOUT_MS = 5 * 60_000; // 5분간 연결 없으면 프로세스 종료
 export const COMMAND_TIMEOUT_MS = 300_000; // 5 minutes
 export const IMAGE_SCAN_TIMEOUT_MS = 2_000;
 export const MAX_IMAGES_PER_RESPONSE = 5;
