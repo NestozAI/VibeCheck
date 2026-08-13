@@ -49,24 +49,39 @@ async function main(): Promise<void> {
 
   let consecutiveFailures = 0;
 
-  // Watchdog: 5분간 서버 연결 성공이 없으면 프로세스 종료 → systemd 재시작
+  // Watchdog: "연결이 없는 상태"가 5분 지속되면 프로세스 종료 → systemd 재시작.
+  // 주의: agent.connect()의 Promise는 연결이 "닫힐 때" resolve되므로, 연결 성공
+  // 시점의 해제는 반드시 onConnected 콜백(open 이벤트)에서 해야 한다 — resolve
+  // 이후에 리셋하면 살아 있는 연결 중에도 타이머가 터진다 (5분마다 재시작하며
+  // 5분 이상 걸리는 작업을 전부 죽이던 버그의 원인).
   let watchdog: ReturnType<typeof setTimeout> | null = null;
-  const resetWatchdog = () => {
+  const disarmWatchdog = () => {
     if (watchdog) clearTimeout(watchdog);
+    watchdog = null;
+  };
+  const armWatchdog = () => {
+    disarmWatchdog();
     watchdog = setTimeout(() => {
       console.error(`[agent] Watchdog: no connection for ${WATCHDOG_TIMEOUT_MS / 60000}min. Exiting for clean restart.`);
       process.exit(1);
     }, WATCHDOG_TIMEOUT_MS);
     watchdog.unref(); // don't prevent exit
   };
-  resetWatchdog();
+
+  // 연결이 열리면 watchdog 해제 + 실패 카운터 리셋
+  agent.onConnected = () => {
+    disarmWatchdog();
+    consecutiveFailures = 0;
+  };
+
+  armWatchdog();
 
   while (true) {
     try {
-      await agent.connect();
-      consecutiveFailures = 0; // Reset on successful connection
-      resetWatchdog(); // 연결 성공 시 watchdog 리셋
+      await agent.connect(); // resolves when the connection CLOSES
+      armWatchdog(); // 연결이 끊긴 시점부터 무연결 카운트 시작
     } catch (error) {
+      armWatchdog(); // 연결 실패/오류 — 무연결 상태이므로 다시 감시
       if (
         error instanceof Error &&
         (error.message.includes("SIGINT") ||
