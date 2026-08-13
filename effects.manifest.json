@@ -1,0 +1,182 @@
+{
+  "version": 1,
+  "note": "이 리포의 모든 side-effect 출구 레지스트리 — GOVERNANCE.md 참조. 탐지 축은 import + 클라이언트 생성자 (메서드명 grep 금지). 스캐너: node scripts/scan-effects.mjs",
+  "sources": ["cloud/agent-ts/src", "self-hosted/src", "scripts", "assets"],
+  "effects": [
+    {
+      "id": "ws-uplink",
+      "category": "network",
+      "exit_patterns": [
+        "from \"ws\"",
+        "new WebSocket\\(",
+        "new WebSocketServer",
+        "from \"node:http\""
+      ],
+      "choke_point": "cloud/agent-ts/src/agent.ts#send (resolveDelivery 정책 경유)",
+      "allowed_sites": [
+        "cloud/agent-ts/src/agent.ts",
+        "self-hosted/src/server.ts"
+      ],
+      "log_stream": "~/.vibecheck/logs/effects-*.jsonl (effect=ws-uplink) — agent-ts만; self-hosted는 [manual]",
+      "recon": "per-trigger: 모든 query/schedule trigger-id에 유예 15분 내 sent|skipped|failed 대사 (scripts/recon-effects.mjs). self-hosted 서버 측은 [manual]",
+      "downstream": [
+        "VibeCheck-server(별도 레포)가 response를 웹/Slack 클라이언트로 중계 — 서버 레포의 effect_events/recon_results가 서버 측 대사를 담당"
+      ]
+    },
+    {
+      "id": "claude-query",
+      "category": "sdk",
+      "exit_patterns": [
+        "@anthropic-ai/claude-agent-sdk"
+      ],
+      "choke_point": "cloud/agent-ts/src/claude.ts#ClaudeSession.execute",
+      "allowed_sites": [
+        "cloud/agent-ts/src/claude.ts",
+        "self-hosted/src/shared/claude.ts"
+      ],
+      "log_stream": "Claude Code 세션 로그 (~/.claude/projects/*.jsonl)",
+      "recon": "[manual] SDK 위임 효과(파일 쓰기·명령 실행·Anthropic API)는 approval-gate recon과 Claude Code 세션 로그로 확인. 자동 대사 없음",
+      "downstream": [
+        "Claude Code가 workDir 안에서 임의 도구 실행 — 경계는 approval-gate(security.ts)가 통제"
+      ]
+    },
+    {
+      "id": "approval-gate",
+      "category": "messaging",
+      "exit_patterns": [
+        "onApprovalNeeded"
+      ],
+      "choke_point": "cloud/agent-ts/src/security.ts#canUseTool → settleApproval (resolvePermissionGate/resolveApprovalReply 정책 경유)",
+      "allowed_sites": [
+        "cloud/agent-ts/src/security.ts",
+        "cloud/agent-ts/src/agent.ts",
+        "self-hosted/src/shared/security.ts",
+        "self-hosted/src/server.ts",
+        "self-hosted/src/slack/handler.ts"
+      ],
+      "log_stream": "~/.vibecheck/logs/effects-*.jsonl (effect=approval-gate) — agent-ts만",
+      "recon": "per-trigger: 모든 approval trigger-id에 유예 15분(타임아웃 10분+여유) 내 sent|skipped 대사 (scripts/recon-effects.mjs)",
+      "downstream": []
+    },
+    {
+      "id": "slack-notify",
+      "category": "sdk",
+      "exit_patterns": [
+        "@slack/bolt",
+        "new App\\("
+      ],
+      "choke_point": "self-hosted/src/slack/handler.ts",
+      "allowed_sites": [
+        "self-hosted/src/slack/handler.ts"
+      ],
+      "log_stream": "[manual] self-hosted에는 effect log 미구현 (콘솔만)",
+      "recon": "[manual] Slack 응답 대사 미자동화 — 후속: agent-ts effects 모듈을 shared로 이식",
+      "downstream": []
+    },
+    {
+      "id": "self-update",
+      "category": "process",
+      "exit_patterns": [
+        "npm view vibecheck-agent",
+        "npm install -g vibecheck-agent",
+        "from \"node:child_process\""
+      ],
+      "choke_point": "cloud/agent-ts/src/updater.ts#checkForUpdates",
+      "allowed_sites": [
+        "cloud/agent-ts/src/updater.ts"
+      ],
+      "log_stream": "journald (console) — 모든 경로가 사유와 함께 로깅됨 (check-failed/up-to-date/updated/update-failed)",
+      "recon": "[manual] journalctl -u vibecheck-agent | grep updater 로 업데이트 성공/실패 확인, 릴리스 시",
+      "downstream": [
+        "성공 시 index.ts self-restart 트리거"
+      ]
+    },
+    {
+      "id": "self-restart",
+      "category": "process",
+      "exit_patterns": [
+        "spawn\\(process\\.argv\\[0\\]",
+        "from \"node:child_process\""
+      ],
+      "choke_point": "cloud/agent-ts/src/index.ts",
+      "allowed_sites": [
+        "cloud/agent-ts/src/index.ts"
+      ],
+      "log_stream": "journald (console)",
+      "recon": "[manual] systemd Restart=always + scripts/health-check.sh cron이 생존 확인",
+      "downstream": []
+    },
+    {
+      "id": "preview-screenshot",
+      "category": "process",
+      "exit_patterns": [
+        "import\\(\"playwright\"\\)",
+        "chromium\\.launch",
+        "execSync\\(\"npm install\"",
+        "from \"node:net\"",
+        "from \"node:child_process\""
+      ],
+      "choke_point": "cloud/agent-ts/src/screenshot.ts#screenshotProject (실패 시 reason 반환 강제)",
+      "allowed_sites": [
+        "cloud/agent-ts/src/screenshot.ts",
+        "self-hosted/src/shared/screenshot.ts"
+      ],
+      "log_stream": "~/.vibecheck/logs/effects-*.jsonl (effect=screenshot) — agent-ts만",
+      "recon": "per-trigger: 스크린샷 trigger-id에 sent|skipped(reason) 대사 (scripts/recon-effects.mjs). ⚠ 유저 프로젝트에 npm install을 실행하는 무거운 효과",
+      "downstream": []
+    },
+    {
+      "id": "local-state",
+      "category": "filesystem",
+      "exit_patterns": [
+        "__fs_write__"
+      ],
+      "choke_point": "wrapper funnel: session.ts(세션맵)·scheduler.ts(스케줄 파일)·effects/log.ts(effect 로그)·agent.ts(임시 이미지)",
+      "allowed_sites": [
+        "cloud/agent-ts/src/session.ts",
+        "cloud/agent-ts/src/scheduler.ts",
+        "cloud/agent-ts/src/agent.ts",
+        "cloud/agent-ts/src/effects/log.ts",
+        "self-hosted/src/shared/session.ts",
+        "self-hosted/src/shared/scheduler.ts"
+      ],
+      "log_stream": "journald (console)",
+      "recon": "[manual] 로컬 상태 파일 손상은 세션 재개 실패로 표면화 — 주기 대사 없음",
+      "downstream": [
+        "~/.vibecheck/sessions/* → 세션 재개가 읽음",
+        "~/.vibecheck/logs/effects-*.jsonl → recon 잡이 읽음"
+      ]
+    },
+    {
+      "id": "ops-restart",
+      "category": "process",
+      "exit_patterns": [
+        "systemctl (restart|stop|start)"
+      ],
+      "choke_point": "scripts/health-check.sh",
+      "allowed_sites": [
+        "scripts/health-check.sh"
+      ],
+      "log_stream": "/tmp/vibecheck-health.log (README cron 설정 기준)",
+      "recon": "[manual] health-check 로그에서 재시작 빈도 확인, 주 1회",
+      "downstream": []
+    }
+  ],
+  "exceptions": [
+    {
+      "path": "assets/record-demo.mjs",
+      "reason": "데모 GIF 녹화용 개발 스크립트 (playwright) — 배포 코드 아님",
+      "expires": "2027-06-30"
+    },
+    {
+      "path": "scripts/scan-effects.mjs",
+      "reason": "스캐너 자체가 패턴 문자열을 보유",
+      "expires": "2027-06-30"
+    },
+    {
+      "path": "scripts/recon-effects.mjs",
+      "reason": "recon 잡 자체의 로그 파일 읽기",
+      "expires": "2027-06-30"
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+#!/bin/sh
+# Effect governance pre-push 게이트 (GOVERNANCE.md)
+# 설치(1회): git config core.hooksPath scripts/git-hooks
+set -e
+cd "$(git rev-parse --show-toplevel)"
+
+echo "[pre-push] effect scan..."
+node scripts/scan-effects.mjs
+
+echo "[pre-push] matrix completeness tests..."
+cd cloud/agent-ts && npm test

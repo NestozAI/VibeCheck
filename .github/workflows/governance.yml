@@ -1,0 +1,21 @@
+name: governance
+
+on: [push, pull_request]
+
+jobs:
+  effects:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      # 존재 계층: 미등록/경계 밖 출구가 있으면 실패
+      - run: node scripts/scan-effects.mjs
+      # 커버리지 계층: 매트릭스 완전성 테스트 + 빌드
+      - run: npm ci
+        working-directory: cloud/agent-ts
+      - run: npm test
+        working-directory: cloud/agent-ts
+      - run: npm run build
+        working-directory: cloud/agent-ts

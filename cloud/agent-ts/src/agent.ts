@@ -45,6 +45,17 @@ import type {
 import { getSkill, getAllSkills } from "./skills.js";
 import { TaskScheduler, type ScheduledTask } from "./scheduler.js";
 import { scanClaudeCodeSessions, scanAllProjects, readSessionHistory } from "./sessions-scanner.js";
+import { randomUUID } from "node:crypto";
+import { logEffect } from "./effects/log.js";
+import {
+  classifyUplink,
+  resolveDelivery,
+  resolveScreenshot,
+  type QuerySource,
+} from "./effects/policy.js";
+
+/** ws 닫힘 동안 보관하는 durable 메시지 상한 (초과 시 가장 오래된 것부터 drop+로그) */
+const MAX_UPLINK_QUEUE = 50;
 
 export class VibeAgent {
   private ws: WebSocket | null = null;
@@ -54,6 +65,10 @@ export class VibeAgent {
   private processing = false;
   /** Scheduled tasks that arrived while a user query was in progress */
   private pendingScheduledTasks: ScheduledTask[] = [];
+  /** Durable messages that could not be sent while disconnected (policy: resolveDelivery) */
+  private uplinkQueue: Array<{ msg: AgentToServerMessage; triggerId?: string }> = [];
+  /** Called when the WebSocket opens — used by index.ts to disarm the no-connection watchdog */
+  onConnected?: () => void;
   private pingInterval: ReturnType<typeof setInterval> | null = null;
   private pongReceived = true;
   private lastProjectPath: string | null = null;
@@ -153,9 +168,13 @@ export class VibeAgent {
 
       this.ws.on("open", async () => {
         console.log("[agent] Connected to server");
+        this.onConnected?.();
 
         // Start ping loop
         this.startPingLoop();
+
+        // Resend responses/approvals that were queued while disconnected
+        this.flushUplinkQueue();
 
         // Sync session with server
         await this.syncSession();
@@ -309,7 +328,17 @@ export class VibeAgent {
     agents?: Record<string, import("./protocol.js").AgentDef>,
     images?: Array<{ filename: string; data: string }>,
   ): Promise<void> {
+    const triggerId = randomUUID();
+    logEffect({ effect: "ws-uplink", trigger_id: triggerId, outcome: "trigger", detail: "query" });
+
     if (this.processing) {
+      // 실제 큐잉은 웹 클라이언트가 담당한다 (B4 — GOVERNANCE.md 매트릭스 참조)
+      logEffect({
+        effect: "ws-uplink",
+        trigger_id: triggerId,
+        outcome: "skipped",
+        reason: "busy-client-side-queue",
+      });
       this.send({
         type: "response",
         result: "⏳ Previous task still running. Your message has been queued and will run automatically when it finishes.",
@@ -363,8 +392,21 @@ export class VibeAgent {
         message.toLowerCase().includes(kw),
       );
       if (wantsScreenshot) {
-        const screenshot = await this.generateScreenshot(message, execResult.text);
-        if (screenshot) images.push(screenshot);
+        logEffect({ effect: "screenshot", trigger_id: triggerId, outcome: "trigger" });
+        const shot = await this.generateScreenshot(message, execResult.text);
+        if (shot.image) {
+          images.push(shot.image);
+          logEffect({ effect: "screenshot", trigger_id: triggerId, outcome: "sent" });
+        } else {
+          // 실패/생략 사유를 유저 응답에 명시한다 (B3 수정 — 침묵 생략 금지)
+          logEffect({
+            effect: "screenshot",
+            trigger_id: triggerId,
+            outcome: "skipped",
+            reason: shot.reason,
+          });
+          execResult.text += `\n\n📷 Screenshot skipped: ${shot.reason}`;
+        }
       }
 
       // Detect new/modified images
@@ -405,7 +447,7 @@ export class VibeAgent {
         ...(execResult.num_turns !== undefined ? { num_turns: execResult.num_turns } : {}),
         ...(execResult.usage ? { usage: execResult.usage } : {}),
       };
-      this.send(response);
+      this.send(response, { triggerId });
 
       if (execResult.cost_usd !== undefined) {
         console.log(
@@ -418,15 +460,22 @@ export class VibeAgent {
       }
     } catch (e) {
       // AbortError from interrupt is handled by handleInterrupt which sends the response
-      // → silently exit here
-      if (e instanceof AbortError) return;
+      if (e instanceof AbortError) {
+        logEffect({
+          effect: "ws-uplink",
+          trigger_id: triggerId,
+          outcome: "skipped",
+          reason: "interrupted",
+        });
+        return;
+      }
 
       const errMsg = e instanceof Error ? e.message : String(e);
       console.error("[agent] Query execution error:", errMsg);
       this.send({
         type: "response",
         result: `Error: ${errMsg}`,
-      });
+      }, { triggerId });
     } finally {
       this.processing = false;
       // Clean up temp image files
@@ -445,6 +494,8 @@ export class VibeAgent {
       return;
     }
     this.processing = true;
+    const triggerId = randomUUID();
+    logEffect({ effect: "ws-uplink", trigger_id: triggerId, outcome: "trigger", detail: "schedule" });
     try {
       const skill = task.skill_id ? getSkill(task.skill_id) : undefined;
       const execResult = await this.claude.execute(task.message, undefined, skill);
@@ -454,10 +505,25 @@ export class VibeAgent {
         result: `⏰ [${task.cron}] ${execResult.text}`,
         ...(execResult.cost_usd !== undefined ? { cost_usd: execResult.cost_usd } : {}),
         ...(execResult.num_turns !== undefined ? { num_turns: execResult.num_turns } : {}),
-      });
+      }, { triggerId, source: "schedule" });
     } catch (e) {
-      if (!(e instanceof AbortError)) {
+      if (e instanceof AbortError) {
+        logEffect({
+          effect: "ws-uplink",
+          trigger_id: triggerId,
+          outcome: "skipped",
+          reason: "interrupted",
+        });
+      } else {
         console.error("[scheduler] Task execution error:", e);
+        // 스케줄 태스크 실패는 유저 응답 없이 종료된다 (기존 동작 유지) — recon 대사용 기록
+        logEffect({
+          effect: "ws-uplink",
+          trigger_id: triggerId,
+          outcome: "failed",
+          reason: "schedule-task-error",
+          detail: e instanceof Error ? e.message.slice(0, 200) : String(e),
+        });
       }
     } finally {
       this.processing = false;
@@ -490,29 +556,32 @@ export class VibeAgent {
   private async generateScreenshot(
     message: string,
     result: string,
-  ): Promise<ImageData | null> {
+  ): Promise<{ image: ImageData | null; reason?: string }> {
     try {
       const projectDir = findProjectDir(
         message + "\n" + result,
         this.workDir,
       );
-      if (!projectDir) return null;
+      const decision = resolveScreenshot({ target: projectDir ? "found" : "none" });
+      if (decision.kind === "skip") return { image: null, reason: decision.reason };
 
-      this.lastProjectPath = projectDir;
+      this.lastProjectPath = projectDir!;
       const outputPath = getScreenshotPath();
-      const screenshotPath = await screenshotProject(projectDir, outputPath);
-      if (!screenshotPath) return null;
+      const shot = await screenshotProject(projectDir!, outputPath);
+      if (!shot.path) return { image: null, reason: shot.reason ?? "screenshot-failed" };
 
-      const b64 = imageToBase64(screenshotPath);
-      if (!b64) return null;
+      const b64 = imageToBase64(shot.path);
+      if (!b64) return { image: null, reason: "image-encode-failed" };
 
       return {
-        filename: "screenshot.png",
-        data: b64,
+        image: {
+          filename: "screenshot.png",
+          data: b64,
+        },
       };
     } catch (e) {
       console.error("[agent] Screenshot generation failed:", e);
-      return null;
+      return { image: null, reason: "screenshot-error" };
     }
   }
 
@@ -628,9 +697,75 @@ export class VibeAgent {
     }
   }
 
-  private send(msg: AgentToServerMessage): void {
-    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-      this.ws.send(JSON.stringify(msg));
+  private send(
+    msg: AgentToServerMessage,
+    opts: { triggerId?: string; source?: QuerySource } = {},
+  ): void {
+    const open = this.ws !== null && this.ws.readyState === WebSocket.OPEN;
+    const decision = resolveDelivery({
+      cls: classifyUplink(msg.type),
+      ws: open ? "open" : "closed",
+      source: opts.source ?? "web",
+      plan: "free", // agent에는 플랜 분기가 아직 없다 — 선언적 차원 (policy.ts 참조)
+    });
+
+    switch (decision.kind) {
+      case "send":
+        this.ws!.send(JSON.stringify(msg));
+        if (opts.triggerId) {
+          logEffect({
+            effect: "ws-uplink",
+            trigger_id: opts.triggerId,
+            outcome: "sent",
+            detail: msg.type,
+          });
+        }
+        return;
+
+      case "queue":
+        this.uplinkQueue.push({ msg, triggerId: opts.triggerId });
+        if (this.uplinkQueue.length > MAX_UPLINK_QUEUE) {
+          const dropped = this.uplinkQueue.shift()!;
+          logEffect({
+            effect: "ws-uplink",
+            trigger_id: dropped.triggerId ?? "untracked",
+            outcome: "failed",
+            reason: "uplink-queue-overflow",
+          });
+        }
+        console.warn(`[agent] Connection closed — queued ${msg.type} for resend`);
+        logEffect({
+          effect: "ws-uplink",
+          trigger_id: opts.triggerId ?? "untracked",
+          outcome: "queued",
+          reason: decision.reason,
+          detail: msg.type,
+        });
+        return;
+
+      case "skip":
+        // 고빈도 스트림/하트비트는 개별 로그에서 제외 (GOVERNANCE.md 참조)
+        if (msg.type !== "streaming_chunk" && msg.type !== "tool_status" &&
+            msg.type !== "ping" && msg.type !== "pong") {
+          logEffect({
+            effect: "ws-uplink",
+            trigger_id: opts.triggerId ?? "untracked",
+            outcome: "skipped",
+            reason: decision.reason,
+            detail: msg.type,
+          });
+        }
+        return;
+    }
+  }
+
+  /** Resend durable messages that were queued while disconnected */
+  private flushUplinkQueue(): void {
+    if (this.uplinkQueue.length === 0) return;
+    console.log(`[agent] Resending ${this.uplinkQueue.length} queued messages`);
+    const queued = this.uplinkQueue.splice(0);
+    for (const item of queued) {
+      this.send(item.msg, { triggerId: item.triggerId });
     }
   }
 

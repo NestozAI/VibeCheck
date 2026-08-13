@@ -238,24 +238,31 @@ export async function htmlFileToScreenshot(
   }
 }
 
+/** screenshotProject 결과 — 실패 시 reason이 반드시 채워진다 (fall-through 금지) */
+export interface ScreenshotResult {
+  path: string | null;
+  reason?: string;
+}
+
 /**
  * Take a screenshot of a project by starting its dev server.
  */
 export async function screenshotProject(
   projectDir: string,
   outputPath: string,
-): Promise<string | null> {
+): Promise<ScreenshotResult> {
   const info = detectProjectType(projectDir);
 
   // Static HTML: screenshot directly
   if (info.type === "static" && info.entry) {
     const htmlPath = path.join(projectDir, info.entry);
-    return htmlFileToScreenshot(htmlPath, outputPath);
+    const p = await htmlFileToScreenshot(htmlPath, outputPath);
+    return p ? { path: p } : { path: null, reason: "html-screenshot-failed" };
   }
 
   // Dev server projects: start server, screenshot, kill
   if (!info.cmd || !info.port) {
-    return null;
+    return { path: null, reason: "not-a-web-project" };
   }
 
   let serverProcess: ChildProcess | null = null;
@@ -267,11 +274,16 @@ export async function screenshotProject(
       !existsSync(path.join(projectDir, "node_modules"))
     ) {
       console.log("[screenshot] Running npm install...");
-      execSync("npm install", {
-        cwd: projectDir,
-        timeout: 60_000,
-        stdio: "ignore",
-      });
+      try {
+        execSync("npm install", {
+          cwd: projectDir,
+          timeout: 60_000,
+          stdio: "ignore",
+        });
+      } catch (e) {
+        console.error("[screenshot] npm install failed:", e);
+        return { path: null, reason: "npm-install-failed" };
+      }
     }
 
     // Start dev server
@@ -287,7 +299,7 @@ export async function screenshotProject(
     const portReady = await waitForPort(info.port, 30_000);
     if (!portReady) {
       console.warn("[screenshot] Server start timeout (30s)");
-      return null;
+      return { path: null, reason: "server-start-timeout" };
     }
 
     // Take screenshot
@@ -303,14 +315,14 @@ export async function screenshotProject(
       });
       await page.screenshot({ path: outputPath, fullPage: true });
       await browser.close();
-      return outputPath;
+      return { path: outputPath };
     } catch (e) {
       console.error("[screenshot] Screenshot capture failed:", e);
-      return null;
+      return { path: null, reason: "screenshot-capture-failed" };
     }
   } catch (e) {
     console.error("[screenshot] Project screenshot failed:", e);
-    return null;
+    return { path: null, reason: "project-screenshot-failed" };
   } finally {
     // Kill dev server process group
     if (serverProcess && serverProcess.pid) {

@@ -1,6 +1,14 @@
 import path from "node:path";
+import { randomUUID } from "node:crypto";
 import type { PermissionResult } from "@anthropic-ai/claude-agent-sdk";
 import { SAFE_SYSTEM_COMMANDS } from "./config.js";
+import { logEffect } from "./effects/log.js";
+import {
+  APPROVAL_TIMEOUT_MS,
+  resolveApprovalReply,
+  resolvePermissionGate,
+  type ApprovalReply,
+} from "./effects/policy.js";
 
 // Regex patterns to extract paths from text
 const ABSOLUTE_PATH_RE = /(?:^|\s)(\/[^\s:*?"<>|]+)/g;
@@ -12,6 +20,8 @@ export class SecurityManager {
     resolve: (result: PermissionResult) => void;
     toolName: string;
     input: Record<string, unknown>;
+    triggerId: string;
+    timer: ReturnType<typeof setTimeout>;
   } | null = null;
 
   /** Callback to send approval_required to WebSocket */
@@ -66,33 +76,41 @@ export class SecurityManager {
     const paths = this.extractPathsFromToolInput(toolName, input);
     const untrusted = paths.filter((p) => !this.isPathTrusted(p));
 
-    // Trusted paths or safe commands → allow immediately
-    if (untrusted.length === 0) {
-      return { behavior: "allow", updatedInput: input };
-    }
-
-    if (
-      toolName === "Bash" &&
-      typeof input.command === "string" &&
-      this.isSafeCommand(input.command)
-    ) {
+    // Branch decision lives in the pure policy (effects/policy.ts) — no ad-hoc ifs here
+    const gate = resolvePermissionGate({
+      trust: untrusted.length === 0 ? "trusted" : "untrusted",
+      tool:
+        toolName === "Bash" &&
+        typeof input.command === "string" &&
+        this.isSafeCommand(input.command)
+          ? "safe-bash"
+          : "other",
+    });
+    if (gate.kind === "allow") {
       return { behavior: "allow", updatedInput: input };
     }
 
     // Request approval from web UI via WebSocket
+    const triggerId = randomUUID();
+    logEffect({
+      effect: "approval-gate",
+      trigger_id: triggerId,
+      outcome: "trigger",
+      detail: toolName,
+    });
     this.onApprovalNeeded?.(untrusted, toolName, input);
 
-    // Wait for user response (Promise resolved by resolveApproval)
+    // Wait for user response — resolved by resolveApproval / abort / timeout (B2 fix)
     return new Promise<PermissionResult>((resolve) => {
-      this.pendingApproval = { resolve, toolName, input };
+      const timer = setTimeout(
+        () => this.settleApproval("timeout"),
+        APPROVAL_TIMEOUT_MS,
+      );
+      this.pendingApproval = { resolve, toolName, input, triggerId, timer };
 
-      // Handle abort signal
       options.signal.addEventListener(
         "abort",
-        () => {
-          this.pendingApproval = null;
-          resolve({ behavior: "deny", message: "Operation aborted" });
-        },
+        () => this.settleApproval("abort"),
         { once: true },
       );
     });
@@ -102,19 +120,46 @@ export class SecurityManager {
    * Called by agent when approval/denial arrives from server.
    */
   resolveApproval(approved: boolean, permanent: boolean): void {
-    if (!this.pendingApproval) return;
-    const { resolve, toolName, input } = this.pendingApproval;
+    this.settleApproval(
+      approved ? (permanent ? "allow-permanent" : "allow") : "deny",
+    );
+  }
 
-    if (approved) {
-      if (permanent) {
+  /** 승인 대기의 유일한 종결 지점 — 모든 경로가 sent|skipped(reason)으로 기록된다 */
+  private settleApproval(reply: ApprovalReply): void {
+    if (!this.pendingApproval) return;
+    const { resolve, toolName, input, triggerId, timer } = this.pendingApproval;
+    clearTimeout(timer);
+    this.pendingApproval = null;
+
+    const decision = resolveApprovalReply(reply);
+    if (decision.kind === "allow") {
+      if (decision.persist) {
         const paths = this.extractPathsFromToolInput(toolName, input);
         paths.forEach((p) => this.addTrustedPath(p));
       }
+      logEffect({
+        effect: "approval-gate",
+        trigger_id: triggerId,
+        outcome: "sent",
+        reason: reply,
+      });
       resolve({ behavior: "allow", updatedInput: input });
     } else {
-      resolve({ behavior: "deny", message: "User denied the request" });
+      logEffect({
+        effect: "approval-gate",
+        trigger_id: triggerId,
+        outcome: "skipped",
+        reason: decision.reason,
+      });
+      const message =
+        decision.reason === "user-denied"
+          ? "User denied the request"
+          : decision.reason === "approval-timeout"
+            ? `Approval request timed out after ${APPROVAL_TIMEOUT_MS / 60_000} minutes`
+            : "Operation aborted";
+      resolve({ behavior: "deny", message });
     }
-    this.pendingApproval = null;
   }
 
   private extractPathsFromToolInput(
